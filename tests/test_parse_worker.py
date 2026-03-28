@@ -257,9 +257,41 @@ class ParseWorkerTestCase(unittest.TestCase):
             clauses = json.loads((Path(runtime_dir) / "metadata" / "clauses.json").read_text(encoding="utf-8"))
             chapter_texts = [payload["chapter_text"] for payload in chapters.values()]
             clause_locations = [payload["location_label"] for payload in clauses.values()]
+            clause_types = [payload["clause_type"] for payload in clauses.values()]
+            clause_chapter_titles = [payload["chapter_title"] for payload in clauses.values()]
 
             self.assertTrue(any("供应商须具备独立承担民事责任的能力。" in text for text in chapter_texts))
             self.assertTrue(any(location.startswith("第一章 资格要求 / 1.1 供应商资格") for location in clause_locations))
+            self.assertIn("条款片段", clause_types)
+            self.assertTrue(all(title == "第一章 资格要求" for title in clause_chapter_titles))
+
+    def test_review_input_assembler_keeps_clause_type_and_chapter_context(self):
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 资格要求",
+                            "本章适用于供应商资格初审。",
+                            "1.1 供应商资格",
+                            "供应商须具备独立承担民事责任的能力。",
+                        ]
+                    ),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+
+            runtime_input = ReviewInputAssembler(repository, ReviewAssetLoader(root_dir)).assemble(
+                upload_response["task_id"]
+            )
+
+            self.assertTrue(any(clause.chapter_title == "第一章 资格要求" for clause in runtime_input.clauses))
+            self.assertTrue(any(clause.clause_type == "条款片段" for clause in runtime_input.clauses))
+            self.assertTrue(any(clause.clause_type == "段落片段" for clause in runtime_input.clauses))
 
     def test_parse_worker_extracts_text_from_doc(self):
         with tempfile.TemporaryDirectory() as runtime_dir:

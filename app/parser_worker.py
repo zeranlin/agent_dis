@@ -88,14 +88,17 @@ class ParseWorker:
                 clause_count += 1
                 chapter_title = str(chapter_payload["chapter_title"])
                 location_anchor = block.source_anchor or block.title or f"片段{block.order_index}"
+                clause_type = "条款片段" if block.block_type == "clause" else "段落片段"
                 self.repository.save_clause(
                     build_clause_record(
                         clause_id=f"clause_{uuid4().hex[:12]}",
                         document_id=document.document_id,
                         chapter_id=parent_chapter_id,
+                        chapter_title=chapter_title,
                         clause_order=block.order_index,
                         clause_text=block.text,
                         location_label=f"{chapter_title} / {location_anchor}",
+                        clause_type=clause_type,
                     )
                 )
 
