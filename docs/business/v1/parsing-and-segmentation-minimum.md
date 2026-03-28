@@ -417,3 +417,121 @@ V1 建议统一采用三级判定：
 下一步进入：
 
 - `1.3.1 切分块数据结构`
+
+### 1.3.1 切分块数据结构
+
+本节已确认结论：
+
+#### 1.3.1.1 设计目标
+
+- 不做很重的文档模型
+- 而是做一个能直接服务后续审查的最小块对象
+- 这个对象要同时满足：
+  - `LLM` 可消费
+  - 风险点可挂接
+  - 原文可追溯
+  - 报告可引用
+
+#### 1.3.1.2 对象名称
+
+V1 建议统一命名为：
+
+- `document_block`
+
+#### 1.3.1.3 必须字段
+
+建议必须字段固定为：
+
+- `block_id`
+- `task_id`
+- `block_type`
+- `title`
+- `text`
+- `order_index`
+- `source_page_start`
+- `source_page_end`
+- `source_anchor`
+- `parent_block_id`
+
+字段说明：
+
+- `block_id`：块唯一标识
+- `task_id`：所属任务
+- `block_type`：`section` / `clause` / `paragraph`
+- `title`：块标题，没有则可为空
+- `text`：块正文
+- `order_index`：在全文中的顺序
+- `source_page_start` / `source_page_end`：页码范围
+- `source_anchor`：原标题、条款号、编号等定位线索
+- `parent_block_id`：父块，没有则为空
+
+#### 1.3.1.4 建议字段
+
+建议再保留以下可选字段：
+
+- `block_level`
+- `path_titles`
+- `path_ids`
+- `extracted_from`
+- `quality_flag`
+- `token_estimate`
+
+字段说明：
+
+- `block_level`：层级深度
+- `path_titles`：从根到当前块的标题路径
+- `path_ids`：从根到当前块的块 id 路径
+- `extracted_from`：来自章节、条款还是段落退化切分
+- `quality_flag`：如 `normal` / `degraded`
+- `token_estimate`：供后续 `LLM` 编排做预算
+
+#### 1.3.1.5 关系表达
+
+V1 只保留 3 类基础关系：
+
+- 父子关系：`parent_block_id`
+- 顺序关系：`order_index`
+- 路径关系：`path_titles` / `path_ids`
+
+这已经足够支撑后续：
+
+- 块内审查
+- 上下文回溯
+- 报告引用
+- 风险归类
+
+#### 1.3.1.6 页码与定位表达
+
+V1 不做字符级 `offset`，先统一采用：
+
+- 页码范围
+- 标题锚点
+- 条款号或编号锚点
+
+目标是先保证“人能找回去”，不追求字符级精确高亮。
+
+#### 1.3.1.7 与后续对象的连接方式
+
+后续至少应允许以下对象直接挂到 `document_block`：
+
+- 风险点
+- 证据片段
+- 审查规则命中
+- 报告引用来源
+
+因此，后续对象统一优先通过：
+
+- `block_id`
+
+完成挂接，而不要反向依赖原始页码拼接。
+
+## 8. 当前下一步
+
+当前已完成：
+
+- `1.2.1 可审查正文判定标准`
+- `1.3.1 切分块数据结构`
+
+下一步进入：
+
+- `1.1.1 文件失败分类细化`
