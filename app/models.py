@@ -126,6 +126,57 @@ class ClauseRecord:
         return asdict(self)
 
 
+@dataclass
+class RiskItemRecord:
+    risk_id: str
+    task_id: str
+    project_id: str
+    document_id: str
+    clause_id: str
+    rule_id: str
+    risk_title: str
+    risk_level: str
+    execution_level: str
+    rule_domain: str
+    file_module: str
+    location_label: str
+    risk_description: str
+    review_reasoning: str
+    status: str
+    created_at: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
+class EvidenceItemRecord:
+    evidence_id: str
+    risk_id: str
+    document_id: str
+    clause_id: str
+    evidence_type: str
+    quoted_text: str
+    location_label: str
+    evidence_note: str
+    page_start: int
+    page_end: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
+class ReviewRuntimeInput:
+    task_id: str
+    document_id: str
+    file_name: str
+    prompt_text: str
+    rules: list[dict[str, object]]
+    clauses: list[ClauseRecord]
+    output_schema: dict[str, object]
+
+
 def build_review_task(
     *,
     task_id: str,
@@ -216,6 +267,65 @@ def build_clause_record(
         clause_text=clause_text,
         normalized_text=" ".join(clause_text.split()),
         location_label=location_label,
+        page_start=1,
+        page_end=1,
+    )
+
+
+def build_risk_item_record(
+    *,
+    risk_id: str,
+    task_id: str,
+    project_id: str,
+    document_id: str,
+    clause_id: str,
+    rule: dict[str, object],
+    location_label: str,
+    risk_description: str,
+    review_reasoning: str,
+) -> RiskItemRecord:
+    file_module = rule.get("file_module", "")
+    if isinstance(file_module, list):
+        file_module = "、".join(str(item) for item in file_module)
+    return RiskItemRecord(
+        risk_id=risk_id,
+        task_id=task_id,
+        project_id=project_id,
+        document_id=document_id,
+        clause_id=clause_id,
+        rule_id=str(rule["rule_id"]),
+        risk_title=str(rule["rule_name"]),
+        risk_level=str(rule["risk_level"]),
+        execution_level=str(rule["execution_level"]),
+        rule_domain=str(rule["rule_domain"]),
+        file_module=str(file_module),
+        location_label=location_label,
+        risk_description=risk_description,
+        review_reasoning=review_reasoning,
+        status="identified",
+        created_at=now_iso(),
+    )
+
+
+def build_evidence_item_record(
+    *,
+    evidence_id: str,
+    risk_id: str,
+    document_id: str,
+    clause_id: str,
+    quoted_text: str,
+    location_label: str,
+    evidence_note: str,
+) -> EvidenceItemRecord:
+    return EvidenceItemRecord(
+        evidence_id=evidence_id,
+        risk_id=risk_id,
+        document_id=document_id,
+        clause_id=clause_id,
+        evidence_type="原文证据",
+        quoted_text=quoted_text,
+        location_label=location_label,
+        evidence_note=evidence_note,
         page_start=1,
         page_end=1,
     )

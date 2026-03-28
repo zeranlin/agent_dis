@@ -73,6 +73,9 @@ class ParseWorker:
 
             task.transition_to("parsed", f"文件解析完成，已生成 {len(chapter_segments)} 个章节和 {clause_count} 个条款。")
             self.repository.save_task(task)
+            task.transition_to("review_queued", "文件解析完成，系统即将开始规则审查。")
+            self.repository.save_task(task)
+            self.repository.enqueue_review_job(task)
         except Exception as exc:
             self.repository.save_document(document.with_updates(parsed_status="failed"))
             task.mark_failed(

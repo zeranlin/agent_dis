@@ -4,7 +4,7 @@ import json
 import threading
 from pathlib import Path
 
-from app.models import ChapterRecord, ClauseRecord, DocumentRecord, ReviewTask
+from app.models import ChapterRecord, ClauseRecord, DocumentRecord, EvidenceItemRecord, ReviewTask, RiskItemRecord
 
 
 class JsonRepository:
@@ -16,13 +16,17 @@ class JsonRepository:
         self.metadata_dir = self.root_dir / "metadata"
         self.upload_dir = self.root_dir / "uploads"
         self.queue_dir = self.root_dir / "queues" / "parse"
+        self.review_queue_dir = self.root_dir / "queues" / "review"
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.queue_dir.mkdir(parents=True, exist_ok=True)
+        self.review_queue_dir.mkdir(parents=True, exist_ok=True)
         self.tasks_path = self.metadata_dir / "review_tasks.json"
         self.documents_path = self.metadata_dir / "documents.json"
         self.chapters_path = self.metadata_dir / "chapters.json"
         self.clauses_path = self.metadata_dir / "clauses.json"
+        self.risks_path = self.metadata_dir / "risks.json"
+        self.evidences_path = self.metadata_dir / "evidences.json"
 
     def save_task(self, task: ReviewTask) -> None:
         self._update_json_mapping(self.tasks_path, task.task_id, task.to_dict())
@@ -50,6 +54,39 @@ class JsonRepository:
     def save_clause(self, clause: ClauseRecord) -> None:
         self._update_json_mapping(self.clauses_path, clause.clause_id, clause.to_dict())
 
+    def list_clauses_by_document(self, document_id: str) -> list[ClauseRecord]:
+        clauses = self._read_json(self.clauses_path)
+        clause_records = [
+            ClauseRecord(**payload)
+            for payload in clauses.values()
+            if payload["document_id"] == document_id
+        ]
+        return sorted(clause_records, key=lambda item: item.clause_order)
+
+    def save_risk(self, risk: RiskItemRecord) -> None:
+        self._update_json_mapping(self.risks_path, risk.risk_id, risk.to_dict())
+
+    def save_evidence(self, evidence: EvidenceItemRecord) -> None:
+        self._update_json_mapping(self.evidences_path, evidence.evidence_id, evidence.to_dict())
+
+    def list_risks_by_task(self, task_id: str) -> list[RiskItemRecord]:
+        risks = self._read_json(self.risks_path)
+        risk_records = [
+            RiskItemRecord(**payload)
+            for payload in risks.values()
+            if payload["task_id"] == task_id
+        ]
+        return sorted(risk_records, key=lambda item: item.created_at)
+
+    def list_evidences_by_risk(self, risk_id: str) -> list[EvidenceItemRecord]:
+        evidences = self._read_json(self.evidences_path)
+        evidence_records = [
+            EvidenceItemRecord(**payload)
+            for payload in evidences.values()
+            if payload["risk_id"] == risk_id
+        ]
+        return sorted(evidence_records, key=lambda item: item.evidence_id)
+
     def save_upload(self, task_id: str, file_name: str, content: bytes) -> Path:
         target_path = self.upload_dir / f"{task_id}-{file_name}"
         target_path.write_bytes(content)
@@ -65,13 +102,33 @@ class JsonRepository:
         self._write_json(queue_path, payload)
         return queue_path
 
+    def enqueue_review_job(self, task: ReviewTask) -> Path:
+        queue_path = self.review_queue_dir / f"{task.task_id}.json"
+        payload = {
+            "task_id": task.task_id,
+            "document_id": task.document_id,
+            "internal_status": task.internal_status,
+        }
+        self._write_json(queue_path, payload)
+        return queue_path
+
     def list_parse_jobs(self) -> list[Path]:
         return sorted(self.queue_dir.glob("*.json"))
+
+    def list_review_jobs(self) -> list[Path]:
+        return sorted(self.review_queue_dir.glob("*.json"))
 
     def read_parse_job(self, path: Path) -> dict[str, object]:
         return self._read_json(path)
 
     def delete_parse_job(self, path: Path) -> None:
+        if path.exists():
+            path.unlink()
+
+    def read_review_job(self, path: Path) -> dict[str, object]:
+        return self._read_json(path)
+
+    def delete_review_job(self, path: Path) -> None:
         if path.exists():
             path.unlink()
 
