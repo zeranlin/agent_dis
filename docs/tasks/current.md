@@ -4,9 +4,15 @@
 
 - 政府采购招标文件合规审查业务方案细化
 
+## 当前角色分工
+
+- 总负责人：统一产品方向、角色协同和最终收口
+- 产品经理 P：负责业务方案、产品文档和验收口径
+- 技术负责人 T：负责技术方案、接口、状态和开发准备
+
 ## 当前目标
 
-- 在现有业务结论、本体结构和规则框架基础上，继续收敛出更可执行的产品方案
+- 在现有业务方案基础上，建立 Owner / P / T 协作机制，并推动 V1 进入技术方案准备阶段
 
 ## 当前进展
 
@@ -26,6 +32,9 @@
 - 已形成 V1 规则配置样例草案
 - 已形成 V1 验收标准草案
 - 已形成给技术负责人的开发启动说明
+- 已建立 Owner / P / T 角色说明
+- 已建立 P 到 T、T 到总负责人的交接规则
+- 已建立 `docs/tech/v1/` 技术文档目录
 
 ## 当前结论
 
@@ -38,17 +47,40 @@
 - V1 已具备交给技术负责人开展技术方案和原型设计的主要文档基础
 - V1 交互当前收敛为：上传页 -> 审核中状态 -> 结果页
 - V1 文档包已进一步补齐到可支撑技术负责人启动开发设计的程度
+- 当前仓库已具备支持 3 个独立线程协同推进的基础
+
+## 当前任务列表
+
+### 总负责人
+
+- 统一审阅 P 与 T 的后续产出
+- 决定技术方案是否通过并进入开发阶段
+
+### 产品经理 P
+
+- 维护 `docs/business/v1/` 的产品方案一致性
+- 配合技术负责人补充实现所需的产品侧说明
+
+### 技术负责人 T
+
+- 在 `docs/tech/v1/` 下输出第一版技术方案
+- 优先补齐系统设计、状态流转、接口草案和开发计划
 
 ## 下一步建议
 
-- 从技术负责人的视角，继续细化技术方案、接口定义、任务状态流转和异常处理方案
+- 由技术负责人 T 先输出 V1 技术方案首包，优先补齐系统设计、状态流转和接口草案
 
 ## 阻塞或待确认
 
-- 尚未补齐技术侧实现物，例如接口草案、状态机、模块划分和异常处理细则
+- 技术侧实现物尚未正式落地，当前仍缺 `docs/tech/v1/` 下的具体方案文档
 
 ## 关联文档
 
+- `docs/roles/owner.md`
+- `docs/roles/product-manager-p.md`
+- `docs/roles/tech-lead-t.md`
+- `docs/runbooks/handoff-p-to-t.md`
+- `docs/runbooks/handoff-t-to-owner.md`
 - `docs/business/government-procurement-compliance-overview.md`
 - `docs/business/government-procurement-compliance-ontology.md`
 - `docs/business/government-procurement-review-framework.md`
@@ -63,3 +95,4 @@
 - `docs/business/v1/rule-config-examples.md`
 - `docs/business/v1/acceptance-criteria.md`
 - `docs/business/v1/tech-lead-kickoff.md`
+- `docs/tech/v1/README.md`
