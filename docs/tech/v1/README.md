@@ -31,6 +31,7 @@
 - `implementation-prep-round-4.md`：第四轮实现准备，聚焦结果汇总、最终结论生成、Markdown 报告导出与结果对象落地
 - `implementation-prep-round-5.md`：第五轮实现准备，聚焦最小 worker 运行入口、运行闭环测试与闭环表述收口
 - `implementation-prep-round-6.md`：第六轮实现准备，聚焦结果查询接口、下载接口与报告模板稳定化
+- `implementation-prep-round-7.md`：第七轮实现准备，聚焦结果页接入字段明确化、关键错误场景处理与模板后续稳定化
 
 ## 当前规则
 

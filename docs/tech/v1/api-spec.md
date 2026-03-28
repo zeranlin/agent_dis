@@ -159,6 +159,13 @@
 - `top_risks`
 - `risk_items`
 
+当前最小代码实现已补充：
+
+- `conclusion_markdown`
+- `risk_count_summary`
+- `top_risks`
+- `generated_at`
+
 这些字段应作为可选扩展，不应阻塞 V1 首版交付。
 
 ## 6. 下载结果文件
@@ -182,6 +189,12 @@
 
 - `404`：任务不存在或文件不存在
 - `409`：结果尚未就绪
+
+当前最小代码实现进一步区分：
+
+- `409 RESULT_NOT_READY`
+- `409 RESULT_FAILED`
+- `404 DOWNLOAD_NOT_FOUND`
 
 ## 7. 内外对象映射
 

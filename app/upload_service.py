@@ -114,18 +114,37 @@ class UploadService:
         task = self.repository.get_task(task_id)
         if task is None:
             raise ResultAccessError(404, "TASK_NOT_FOUND", "任务不存在。")
+        if task.internal_status == "failed":
+            raise ResultAccessError(409, "RESULT_FAILED", task.status_message)
         if task.internal_status != "completed":
             raise ResultAccessError(409, "RESULT_NOT_READY", "审查结果尚未生成完成。")
 
         result = self.repository.get_result_by_task(task_id)
         if result is None:
             raise ResultAccessError(404, "RESULT_NOT_FOUND", "审查结果不存在。")
-        return result.to_result_response(file_name=task.file_name)
+        risks = self.repository.list_risks_by_task(task_id)
+        severity_order = {"高": 0, "中": 1, "低": 2}
+        top_risks = [
+            {
+                "risk_id": risk.risk_id,
+                "risk_title": risk.risk_title,
+                "risk_level": risk.risk_level,
+                "location_label": risk.location_label,
+                "risk_description": risk.risk_description,
+            }
+            for risk in sorted(
+                risks,
+                key=lambda item: (severity_order.get(item.risk_level, 9), item.created_at),
+            )[:3]
+        ]
+        return result.to_result_response(file_name=task.file_name, top_risks=top_risks)
 
     def download_result_file(self, task_id: str, file_type: str) -> tuple[str, str, str]:
         task = self.repository.get_task(task_id)
         if task is None:
             raise ResultAccessError(404, "TASK_NOT_FOUND", "任务不存在。")
+        if task.internal_status == "failed":
+            raise ResultAccessError(409, "RESULT_FAILED", task.status_message)
         if task.internal_status != "completed":
             raise ResultAccessError(409, "RESULT_NOT_READY", "审查结果尚未生成完成。")
 

@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from app.repository import JsonRepository
 from app.server import ReviewHTTPServer, create_service
-from app.upload_service import UploadFile, UploadProcessingError, UploadService
+from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService
 from app.worker_runner import WorkerRunner
 
 
@@ -103,6 +103,12 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(result_payload["status"], "completed")
             self.assertEqual(len(result_payload["downloadable_files"]), 2)
             self.assertIn("审查已完成", result_payload["summary_title"])
+            self.assertIn("conclusion_markdown", result_payload)
+            self.assertIn("risk_count_summary", result_payload)
+            self.assertIn("top_risks", result_payload)
+            self.assertIn("generated_at", result_payload)
+            self.assertEqual(result_payload["risk_count_summary"]["high"], 2)
+            self.assertGreaterEqual(len(result_payload["top_risks"]), 1)
 
             with urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/report") as response:
                 report_content = response.read().decode("utf-8")
@@ -139,6 +145,63 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(context.exception.code, 409)
             error_payload = json.loads(context.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error_code"], "RESULT_NOT_READY")
+
+    def test_result_and_download_endpoints_return_409_when_task_failed(self):
+        class FailingDocumentRepository(JsonRepository):
+            def save_document(self, document):  # type: ignore[override]
+                raise OSError("document write failed")
+
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = FailingDocumentRepository(Path(runtime_dir))
+            service = UploadService(repository)
+
+            with self.assertRaises(UploadProcessingError):
+                service.create_review_task(UploadFile(filename="招标文件.pdf", content=b"fake-pdf-content"))
+
+            task_payload = json.loads((Path(runtime_dir) / "metadata" / "review_tasks.json").read_text(encoding="utf-8"))
+            task_id = next(iter(task_payload.keys()))
+
+            with self.assertRaises(ResultAccessError) as result_context:
+                service.get_review_result(task_id)
+            self.assertEqual(result_context.exception.error_code, "RESULT_FAILED")
+
+            with self.assertRaises(ResultAccessError) as download_context:
+                service.download_result_file(task_id, "report")
+            self.assertEqual(download_context.exception.error_code, "RESULT_FAILED")
+
+    def test_download_endpoint_returns_404_for_invalid_file_type(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(
+                boundary,
+                "招标文件.docx",
+                (
+                    "第一章 资格要求\n"
+                    "1.1 供应商资格\n"
+                    "供应商须本地注册并在本地办公。\n"
+                    "第二章 评分办法\n"
+                    "2.1 评分标准\n"
+                    "采用综合评价并可酌情打分。\n"
+                ).encode("utf-8"),
+            )
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            task_id = payload["task_id"]
+            WorkerRunner(JsonRepository(server.runtime_dir), Path(__file__).resolve().parent.parent).run_until_idle()
+
+            with self.assertRaises(urllib.error.HTTPError) as context:
+                urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/unknown")
+
+            self.assertEqual(context.exception.code, 404)
+            error_payload = json.loads(context.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error_code"], "DOWNLOAD_NOT_FOUND")
 
     def test_create_review_task_and_query_status(self):
         with TestServerContext() as server:

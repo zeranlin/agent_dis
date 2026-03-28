@@ -198,14 +198,27 @@ class ReviewResultRecord:
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
-    def to_result_response(self, *, file_name: str) -> dict[str, object]:
+    def to_result_response(
+        self,
+        *,
+        file_name: str,
+        top_risks: list[dict[str, object]],
+    ) -> dict[str, object]:
         return {
             "task_id": self.task_id,
             "status": self.status,
             "file_name": file_name,
             "summary_title": self.summary_title,
             "overall_conclusion": self.overall_conclusion,
+            "conclusion_markdown": self.conclusion_markdown,
             "report_markdown": self.report_markdown,
+            "risk_count_summary": {
+                "high": self.risk_count_high,
+                "medium": self.risk_count_medium,
+                "low": self.risk_count_low,
+            },
+            "top_risks": top_risks,
+            "generated_at": self.generated_at,
             "downloadable_files": [
                 {
                     "name": "最终结论.md",
