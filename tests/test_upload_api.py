@@ -103,9 +103,11 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
             self.assertIn("结果页最小实现", html)
             self.assertIn("结果已生成", html)
+            self.assertIn("建议阅读顺序", html)
             self.assertIn("重点风险摘要", html)
             self.assertIn("快速操作", html)
             self.assertIn("查看建议", html)
+            self.assertIn("刷新当前结果页", html)
             self.assertIn("/review-tasks/", html)
             self.assertIn("/api/v1/review-tasks/", html)
             self.assertIn("最终结论.md", html)
@@ -128,7 +130,8 @@ class UploadApiTestCase(unittest.TestCase):
                 html = response.read().decode("utf-8")
 
             self.assertIn("审核中", html)
-            self.assertIn("建议：页面可继续轮询结果接口", html)
+            self.assertIn("查看状态接口", html)
+            self.assertIn("建议：先查看状态接口确认当前阶段", html)
 
     def test_get_result_and_download_files_after_worker_run(self):
         with TestServerContext() as server:
@@ -296,6 +299,7 @@ class UploadApiTestCase(unittest.TestCase):
 
             self.assertIn("任务失败", html)
             self.assertIn("错误码", html)
+            self.assertIn("重新查看当前页面", html)
             self.assertIn("重新提交文件", html)
 
     def test_create_review_task_and_query_status(self):

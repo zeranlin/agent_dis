@@ -29,6 +29,10 @@ ul { line-height: 1.8; }
 .split { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; margin-top: 24px; }
 .note { background: #f0e8da; border-radius: 14px; padding: 16px; line-height: 1.7; }
 .tiny { color: #6d655b; font-size: 14px; }
+.lead { font-size: 18px; margin-bottom: 8px; }
+.section { margin-top: 22px; }
+.actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+.buttonish { display: inline-block; padding: 10px 14px; border-radius: 999px; background: #214d38; color: #fffdf8; text-decoration: none; font-weight: 600; }
 @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
 """
 
@@ -59,7 +63,7 @@ ul { line-height: 1.8; }
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
-  <p>{message}</p>
+  <p class="lead">{message}</p>
   <p class="tiny">结果生成时间：{generated_at}</p>
   <div class="grid">
     <div class="card"><h3>高风险</h3><p>{escape(str(risk_count_summary["high"]))}</p></div>
@@ -68,17 +72,31 @@ ul { line-height: 1.8; }
   </div>
   <div class="split">
     <div>
+      <div class="section">
+      <h2>建议阅读顺序</h2>
+      <p class="tiny">先看风险统计，再看重点风险摘要，最后查看完整结论和审查报告。</p>
+      </div>
+      <div class="section">
       <h2>重点风险摘要</h2>
       <ul>{risk_items_html}</ul>
+      </div>
+      <div class="section">
       <h2>最终结论</h2>
       <pre>{conclusion_markdown}</pre>
+      </div>
+      <div class="section">
       <h2>审查报告</h2>
       <pre>{report_markdown}</pre>
+      </div>
     </div>
     <div>
       <div class="note">
         <h3>快速操作</h3>
         <div class="links">{download_links_html}</div>
+        <div class="actions">
+          <a class="buttonish" href="{page_url}">刷新当前结果页</a>
+          <a class="buttonish" href="{result_api_url}">查看结果接口</a>
+        </div>
         <p class="tiny">页面地址：{page_url}</p>
         <p class="tiny">状态接口：{status_api_url}</p>
         <p class="tiny">结果接口：{result_api_url}</p>
@@ -94,29 +112,38 @@ ul { line-height: 1.8; }
     elif page_state == "failed":
         error_code = escape(str(payload.get("error_code") or "UNKNOWN"))
         status_api_url = escape(str(payload["status_api_url"]))
+        page_url = escape(str(payload["page_url"]))
         body = f"""
 <div class="panel">
   <div class="eyebrow">结果页最小实现</div>
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
-  <p>{message}</p>
+  <p class="lead">{message}</p>
   <p>错误码：{error_code}</p>
-  <p>建议：请根据错误提示重新提交文件，或先检查运行链路。</p>
+  <p>建议：先查看状态接口确认失败原因，再根据提示重新提交文件。</p>
+  <div class="actions">
+    <a class="buttonish" href="{page_url}">重新查看当前页面</a>
+  </div>
   <p class="tiny">状态接口：{status_api_url}</p>
 </div>
 """
     else:
         status_api_url = escape(str(payload["status_api_url"]))
         result_api_url = escape(str(payload["result_api_url"]))
+        page_url = escape(str(payload["page_url"]))
         body = f"""
 <div class="panel">
   <div class="eyebrow">结果页最小实现</div>
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
-  <p>{message}</p>
-  <p>建议：页面可继续轮询结果接口，或稍后刷新查看。</p>
+  <p class="lead">{message}</p>
+  <p>建议：先查看状态接口确认当前阶段，再稍后刷新结果页或轮询结果接口。</p>
+  <div class="actions">
+    <a class="buttonish" href="{page_url}">刷新当前页面</a>
+    <a class="buttonish" href="{status_api_url}">查看状态接口</a>
+  </div>
   <p class="tiny">状态接口：{status_api_url}</p>
   <p class="tiny">结果接口：{result_api_url}</p>
 </div>
