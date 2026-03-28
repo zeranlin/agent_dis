@@ -105,6 +105,10 @@ ul { line-height: 1.8; }
         <h3>查看提示</h3>
         <p class="tiny">如果需要继续核对，可先从重点风险摘要进入，再回到完整审查报告查看上下文。</p>
       </div>
+      <div class="note" style="margin-top: 16px;">
+        <h3>联调说明</h3>
+        <p class="tiny">结果页主要消费结果接口、状态接口和下载地址。联调时可先确认结果接口字段，再检查下载链接是否与页面展示一致。</p>
+      </div>
     </div>
   </div>
 </div>
@@ -126,6 +130,7 @@ ul { line-height: 1.8; }
     <a class="buttonish" href="{page_url}">再次查看当前页面</a>
   </div>
   <p class="tiny">你也可以先查看状态接口，再决定是否重新提交文件：{status_api_url}</p>
+  <p class="tiny">交付说明：失败态页面优先承担告知和排查入口，不承载复杂修复操作。</p>
 </div>
 """
     else:
@@ -146,6 +151,7 @@ ul { line-height: 1.8; }
   </div>
   <p class="tiny">如果你在联调或排查问题，可继续查看状态接口：{status_api_url}</p>
   <p class="tiny">结果生成后，可从这里直接查看结果接口：{result_api_url}</p>
+  <p class="tiny">交付说明：审核中页面当前只负责提示进度和给出查看入口，不承担复杂交互。</p>
 </div>
 """
 

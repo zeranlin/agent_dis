@@ -36,6 +36,7 @@
 - `implementation-prep-round-9.md`：第九轮实现准备，聚焦结果页信息组织细化、快速操作区与交互反馈补全
 - `implementation-prep-round-10.md`：第十轮实现准备，聚焦结果页阅读节奏、动作建议与布局细节优化
 - `implementation-prep-round-11.md`：第十一轮实现准备，聚焦结果页文案自然度、状态说明与辅助提示语微调
+- `implementation-prep-round-12.md`：第十二轮实现准备，聚焦结果页交付说明、联调提示与页面边界说明
 
 ## 当前规则
 
