@@ -40,6 +40,7 @@
 - `implementation-prep-round-13.md`：第十三轮实现准备，聚焦结果页不存在场景的页面级兜底与线程收口判断
 - `implementation-prep-round-14.md`：第十四轮实现准备，聚焦解析链路可用化首轮方案、切分块对象与失败分类落地
 - `implementation-prep-round-15.md`：第十五轮实现准备，聚焦条款误判章节与失败阶段漂移这 2 个最小缺口修复
+- `implementation-prep-round-16.md`：第十六轮实现准备，聚焦目录噪声过滤、DOCX 表格文本提取与切分输出衔接优化
 
 ## 当前规则
 

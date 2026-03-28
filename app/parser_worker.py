@@ -40,6 +40,7 @@ class ParseWorker:
             self.repository.save_document(parsed_document)
 
             section_id_mapping: dict[str, str] = {}
+            chapter_payloads: dict[str, dict[str, object]] = {}
             clause_count = 0
             section_count = 0
 
@@ -63,15 +64,11 @@ class ParseWorker:
                     section_count += 1
                     chapter_id = f"chapter_{uuid4().hex[:12]}"
                     section_id_mapping[block.block_id] = chapter_id
-                    self.repository.save_chapter(
-                        build_chapter_record(
-                            chapter_id=chapter_id,
-                            document_id=document.document_id,
-                            chapter_title=block.title,
-                            chapter_order=block.order_index,
-                            chapter_text=block.text,
-                        )
-                    )
+                    chapter_payloads[chapter_id] = {
+                        "chapter_title": block.title,
+                        "chapter_order": block.order_index,
+                        "text_lines": [block.title],
+                    }
                     continue
 
                 parent_chapter_id = section_id_mapping.get(block.parent_block_id or "")
@@ -79,18 +76,17 @@ class ParseWorker:
                     if not section_id_mapping:
                         fallback_chapter_id = f"chapter_{uuid4().hex[:12]}"
                         section_id_mapping["default"] = fallback_chapter_id
-                        self.repository.save_chapter(
-                            build_chapter_record(
-                                chapter_id=fallback_chapter_id,
-                                document_id=document.document_id,
-                                chapter_title="默认章节",
-                                chapter_order=1,
-                                chapter_text=parsed_document_payload.raw_text,
-                            )
-                        )
+                        chapter_payloads[fallback_chapter_id] = {
+                            "chapter_title": "默认章节",
+                            "chapter_order": 1,
+                            "text_lines": [],
+                        }
                     parent_chapter_id = next(iter(section_id_mapping.values()))
 
+                chapter_payload = chapter_payloads[parent_chapter_id]
+                chapter_payload["text_lines"].append(block.text)
                 clause_count += 1
+                chapter_title = str(chapter_payload["chapter_title"])
                 location_anchor = block.source_anchor or block.title or f"片段{block.order_index}"
                 self.repository.save_clause(
                     build_clause_record(
@@ -99,7 +95,21 @@ class ParseWorker:
                         chapter_id=parent_chapter_id,
                         clause_order=block.order_index,
                         clause_text=block.text,
-                        location_label=location_anchor,
+                        location_label=f"{chapter_title} / {location_anchor}",
+                    )
+                )
+
+            for chapter_id, chapter_payload in chapter_payloads.items():
+                chapter_text = "\n".join(
+                    str(line).strip() for line in chapter_payload["text_lines"] if str(line).strip()
+                )
+                self.repository.save_chapter(
+                    build_chapter_record(
+                        chapter_id=chapter_id,
+                        document_id=document.document_id,
+                        chapter_title=str(chapter_payload["chapter_title"]),
+                        chapter_order=int(chapter_payload["chapter_order"]),
+                        chapter_text=chapter_text,
                     )
                 )
 

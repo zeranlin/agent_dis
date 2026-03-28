@@ -10,6 +10,7 @@ from xml.etree import ElementTree
 CHAPTER_PATTERN = re.compile(r"^(第[一二三四五六七八九十百]+章.*|[一二三四五六七八九十]+、.*|\d+[、.]\D.*)$")
 CLAUSE_PATTERN = re.compile(r"^(\d+(?:\.\d+){0,3}[、.]?.*|第[一二三四五六七八九十]+条.*)$")
 PAGE_NUMBER_PATTERN = re.compile(r"^(?:第?\d+页|\d+/\d+|\d+)$")
+TOC_LINE_PATTERN = re.compile(r"^.+(?:\.{2,}|·{2,}|…{2,}|\s{2,})\s*\d+$")
 W_NAMESPACE = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
 
@@ -90,7 +91,11 @@ def clean_review_text(raw_text: str) -> str:
 
     cleaned_lines: list[str] = []
     for line in non_empty_lines:
+        if line == "目录":
+            continue
         if PAGE_NUMBER_PATTERN.match(line):
+            continue
+        if TOC_LINE_PATTERN.match(line):
             continue
         if line in repeated_short_lines:
             continue
@@ -100,7 +105,7 @@ def clean_review_text(raw_text: str) -> str:
 
 
 def is_reviewable_text(text: str) -> bool:
-    if len(text) < 40:
+    if len(text) < 30:
         return False
 
     lines = [line for line in text.splitlines() if line.strip()]
@@ -251,6 +256,20 @@ def _extract_docx_text(content: bytes) -> str:
         merged = "".join(texts).strip()
         if merged:
             paragraphs.append(merged)
+
+    for table in root.findall(".//w:tbl", W_NAMESPACE):
+        row_values: list[str] = []
+        for row in table.findall(".//w:tr", W_NAMESPACE):
+            cell_values: list[str] = []
+            for cell in row.findall("./w:tc", W_NAMESPACE):
+                texts = [node.text or "" for node in cell.findall(".//w:t", W_NAMESPACE)]
+                merged = "".join(texts).strip()
+                if merged:
+                    cell_values.append(merged)
+            if cell_values:
+                row_values.append(" | ".join(cell_values))
+        if row_values:
+            paragraphs.extend(row_values)
     return "\n".join(paragraphs)
 
 

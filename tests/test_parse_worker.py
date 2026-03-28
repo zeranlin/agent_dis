@@ -31,6 +31,28 @@ def build_minimal_docx(text_lines: list[str]) -> bytes:
     return buffer.getvalue()
 
 
+def build_docx_with_table(paragraph_lines: list[str], table_rows: list[list[str]]) -> bytes:
+    paragraphs = "".join(f"<w:p><w:r><w:t>{line}</w:t></w:r></w:p>" for line in paragraph_lines)
+    rows = []
+    for row in table_rows:
+        cells = "".join(
+            f"<w:tc><w:p><w:r><w:t>{cell}</w:t></w:r></w:p></w:tc>"
+            for cell in row
+        )
+        rows.append(f"<w:tr>{cells}</w:tr>")
+    table_xml = f"<w:tbl>{''.join(rows)}</w:tbl>" if rows else ""
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body>{paragraphs}{table_xml}</w:body>"
+        "</w:document>"
+    )
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("word/document.xml", document_xml)
+    return buffer.getvalue()
+
+
 def build_minimal_pdf(text_lines: list[str]) -> bytes:
     operations = " ".join(f"({line}) Tj" for line in text_lines)
     return (
@@ -148,6 +170,94 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertNotIn("1.2 信用要求", section_titles)
             self.assertIn("1.1 供应商资格", clause_titles)
             self.assertIn("1.2 信用要求", clause_titles)
+
+    def test_parse_worker_filters_toc_like_lines_and_preserves_body(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "目录",
+                            "第一章 资格要求 .......... 1",
+                            "第二章 评分办法 .......... 5",
+                            "第一章 资格要求",
+                            "1.1 供应商资格",
+                            "供应商须具备独立承担民事责任的能力。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            assert task is not None
+            self.assertEqual(task.internal_status, "review_queued")
+            document = repository.get_document(task.document_id)
+            assert document is not None
+            self.assertNotIn("第一章 资格要求 .......... 1", document.raw_text)
+            self.assertNotIn("第二章 评分办法 .......... 5", document.raw_text)
+            self.assertIn("供应商须具备独立承担民事责任的能力。", document.raw_text)
+
+    def test_parse_worker_extracts_docx_table_text_into_reviewable_content(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_docx_with_table(
+                        ["第一章 采购需求", "1.1 供货要求"],
+                        [["评分项", "综合评价"], ["资格项", "供应商须本地注册"]],
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            assert task is not None
+            self.assertEqual(task.internal_status, "review_queued")
+            document = repository.get_document(task.document_id)
+            assert document is not None
+            self.assertIn("评分项 | 综合评价", document.raw_text)
+            self.assertIn("资格项 | 供应商须本地注册", document.raw_text)
+
+    def test_parse_worker_builds_chapter_text_and_location_label_for_review(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 资格要求",
+                            "1.1 供应商资格",
+                            "供应商须具备独立承担民事责任的能力。",
+                            "1.2 信用要求",
+                            "供应商不得存在严重违法失信记录。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            chapters = json.loads((Path(runtime_dir) / "metadata" / "chapters.json").read_text(encoding="utf-8"))
+            clauses = json.loads((Path(runtime_dir) / "metadata" / "clauses.json").read_text(encoding="utf-8"))
+            chapter_texts = [payload["chapter_text"] for payload in chapters.values()]
+            clause_locations = [payload["location_label"] for payload in clauses.values()]
+
+            self.assertTrue(any("供应商须具备独立承担民事责任的能力。" in text for text in chapter_texts))
+            self.assertTrue(any(location.startswith("第一章 资格要求 / 1.1 供应商资格") for location in clause_locations))
 
     def test_parse_worker_extracts_text_from_doc(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
