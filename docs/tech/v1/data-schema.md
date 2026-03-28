@@ -299,6 +299,9 @@ V1 首版至少要持久化：
 | `risk_count_summary` | `review_result` 聚合字段映射 |
 | `top_risks` | `risk_item` 展示摘要 |
 | `downloadable_files` | 结果下载对象列表 |
+| `page_guidance` | 页面主引导文案 |
+| `primary_actions` | 页面主操作按钮列表 |
+| `support_notes` | 页面辅助说明列表 |
 
 技术说明：
 

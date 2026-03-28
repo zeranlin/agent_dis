@@ -83,6 +83,9 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(reviewing_payload["summary_title"], "审查进行中")
             self.assertEqual(reviewing_payload["summary_title"], reviewing_payload["title"])
             self.assertEqual(reviewing_payload["overall_conclusion"], reviewing_payload["message"])
+            self.assertIn("page_guidance", reviewing_payload)
+            self.assertEqual(len(reviewing_payload["primary_actions"]), 2)
+            self.assertEqual(reviewing_payload["support_notes"][0]["title"], "联调说明")
 
     def test_result_page_payload_keeps_canonical_fields_for_failed_task(self):
         class FailingDocumentRepository(JsonRepository):
@@ -104,6 +107,9 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(failed_payload["summary_title"], "审查未完成")
             self.assertEqual(failed_payload["summary_title"], failed_payload["title"])
             self.assertEqual(failed_payload["overall_conclusion"], failed_payload["message"])
+            self.assertIn("page_guidance", failed_payload)
+            self.assertEqual(failed_payload["primary_actions"][0]["label"], "再次查看当前页面")
+            self.assertEqual(failed_payload["support_notes"][0]["title"], "交付说明")
 
     def test_result_page_payload_keeps_canonical_result_fields(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
@@ -131,6 +137,9 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(completed_payload["summary_title"], completed_payload["title"])
             self.assertEqual(completed_payload["overall_conclusion"], completed_payload["message"])
             self.assertIn("downloadable_files", completed_payload)
+            self.assertIn("page_guidance", completed_payload)
+            self.assertEqual(len(completed_payload["primary_actions"]), 2)
+            self.assertEqual(len(completed_payload["support_notes"]), 2)
 
     def test_result_page_renders_completed_task(self):
         with TestServerContext() as server:
@@ -204,7 +213,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("查看状态接口", html)
             self.assertIn("系统仍在处理中", html)
             self.assertIn("建议先查看状态接口确认当前阶段", html)
-            self.assertIn("交付说明", html)
+            self.assertIn("联调说明", html)
 
     def test_result_page_returns_html_when_task_is_missing(self):
         with TestServerContext() as server:

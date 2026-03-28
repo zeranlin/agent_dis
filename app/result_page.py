@@ -8,6 +8,9 @@ def render_result_page(payload: dict[str, object]) -> str:
     title = escape(str(payload.get("summary_title", payload["title"])))
     file_name = escape(str(payload["file_name"]))
     message = escape(str(payload.get("overall_conclusion", payload["message"])))
+    page_guidance = escape(str(payload.get("page_guidance", "")))
+    primary_actions = payload.get("primary_actions", [])
+    support_notes = payload.get("support_notes", [])
 
     base_styles = """
 body { font-family: Georgia, "Noto Serif SC", serif; margin: 0; background: #f6f1e8; color: #1e2a23; }
@@ -40,6 +43,17 @@ ul { line-height: 1.8; }
 """
 
     status_html = f'<div class="status {escape(page_state)}">{escape(str(payload["status_label"]))}</div>'
+    actions_html = "".join(
+        f'<a class="buttonish" href="{escape(str(item["url"]))}">{escape(str(item["label"]))}</a>'
+        for item in primary_actions
+    )
+    support_notes_html = "".join(
+        "<div class=\"note\" style=\"margin-top: 16px;\">"
+        f"<h3>{escape(str(item['title']))}</h3>"
+        f"<p class=\"tiny\">{escape(str(item['body']))}</p>"
+        "</div>"
+        for item in support_notes
+    )
 
     if page_state == "completed":
         risk_count_summary = payload["risk_count_summary"]
@@ -88,7 +102,7 @@ ul { line-height: 1.8; }
     <div>
       <div class="section">
       <h2>建议先这样看</h2>
-      <p class="tiny">先看风险统计，再看重点风险摘要，最后查看完整结论和审查报告，会更容易把握重点。</p>
+      <p class="tiny">{page_guidance}</p>
       </div>
       <div class="section">
       <h2>优先关注的风险</h2>
@@ -107,22 +121,12 @@ ul { line-height: 1.8; }
       <div class="note">
         <h3>快速操作</h3>
         <div class="download-list">{download_links_html}</div>
-        <div class="actions">
-          <a class="buttonish" href="{page_url}">刷新当前结果页</a>
-          <a class="buttonish" href="{result_api_url}">查看结果接口</a>
-        </div>
+        <div class="actions">{actions_html}</div>
         <p class="tiny">页面地址：{page_url}</p>
         <p class="tiny">状态接口：{status_api_url}</p>
         <p class="tiny">结果接口：{result_api_url}</p>
       </div>
-      <div class="note" style="margin-top: 16px;">
-        <h3>查看提示</h3>
-        <p class="tiny">如果需要继续核对，可先从重点风险摘要进入，再回到完整审查报告查看上下文。</p>
-      </div>
-      <div class="note" style="margin-top: 16px;">
-        <h3>联调说明</h3>
-        <p class="tiny">结果页主要消费结果接口、状态接口和下载地址。联调时可先确认结果接口字段，再检查下载链接是否与页面展示一致。</p>
-      </div>
+      {support_notes_html}
     </div>
   </div>
 </div>
@@ -139,12 +143,10 @@ ul { line-height: 1.8; }
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
   <p>错误码：{error_code}</p>
-  <p>建议：先查看状态接口确认失败原因，再根据提示重新提交文件或重新触发任务。</p>
-  <div class="actions">
-    <a class="buttonish" href="{page_url}">再次查看当前页面</a>
-  </div>
+  <p>建议：{page_guidance}</p>
+  <div class="actions">{actions_html}</div>
   <p class="tiny">你也可以先查看状态接口，再决定是否重新提交文件：{status_api_url}</p>
-  <p class="tiny">交付说明：失败态页面优先承担告知和排查入口，不承载复杂修复操作。</p>
+  {support_notes_html}
 </div>
 """
     else:
@@ -158,14 +160,11 @@ ul { line-height: 1.8; }
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
-  <p>系统仍在处理中。建议先查看状态接口确认当前阶段，再稍后刷新本页或轮询结果接口。</p>
-  <div class="actions">
-    <a class="buttonish" href="{page_url}">刷新当前页面</a>
-    <a class="buttonish" href="{status_api_url}">查看状态接口</a>
-  </div>
+  <p>{page_guidance}</p>
+  <div class="actions">{actions_html}</div>
   <p class="tiny">如果你在联调或排查问题，可继续查看状态接口：{status_api_url}</p>
   <p class="tiny">结果生成后，可从这里直接查看结果接口：{result_api_url}</p>
-  <p class="tiny">交付说明：审核中页面当前只负责提示进度和给出查看入口，不承担复杂交互。</p>
+  {support_notes_html}
 </div>
 """
 

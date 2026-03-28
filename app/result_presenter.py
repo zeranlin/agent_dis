@@ -83,6 +83,21 @@ def build_completed_page_payload(
         "result_api_url": result_payload["result_api_url"],
         "page_url": result_payload["page_url"],
         "generated_at": result_payload["generated_at"],
+        "page_guidance": "先看风险统计，再看重点风险摘要，最后查看完整结论和审查报告，会更容易把握重点。",
+        "primary_actions": [
+            {"label": "刷新当前结果页", "url": str(result_payload["page_url"])},
+            {"label": "查看结果接口", "url": str(result_payload["result_api_url"])},
+        ],
+        "support_notes": [
+            {
+                "title": "查看提示",
+                "body": "如果需要继续核对，可先从重点风险摘要进入，再回到完整审查报告查看上下文。",
+            },
+            {
+                "title": "联调说明",
+                "body": "结果页主要消费结果接口、状态接口和下载地址。联调时可先确认结果接口字段，再检查下载链接是否与页面展示一致。",
+            },
+        ],
     }
 
 
@@ -104,6 +119,16 @@ def build_failed_page_payload(
         "error_code": error_code,
         "status_api_url": f"/api/v1/review-tasks/{task_id}",
         "page_url": f"/review-tasks/{task_id}/page",
+        "page_guidance": "建议先查看状态接口确认失败原因，再根据提示重新提交文件或重新触发任务。",
+        "primary_actions": [
+            {"label": "再次查看当前页面", "url": f"/review-tasks/{task_id}/page"},
+        ],
+        "support_notes": [
+            {
+                "title": "交付说明",
+                "body": "失败态页面优先承担告知和排查入口，不承载复杂修复操作。",
+            }
+        ],
     }
 
 
@@ -124,4 +149,15 @@ def build_reviewing_page_payload(
         "status_api_url": f"/api/v1/review-tasks/{task_id}",
         "result_api_url": f"/api/v1/review-tasks/{task_id}/result",
         "page_url": f"/review-tasks/{task_id}/page",
+        "page_guidance": "系统仍在处理中。建议先查看状态接口确认当前阶段，再稍后刷新本页或轮询结果接口。",
+        "primary_actions": [
+            {"label": "刷新当前页面", "url": f"/review-tasks/{task_id}/page"},
+            {"label": "查看状态接口", "url": f"/api/v1/review-tasks/{task_id}"},
+        ],
+        "support_notes": [
+            {
+                "title": "联调说明",
+                "body": "审核中页面当前只负责提示进度和给出查看入口，不承担复杂交互。",
+            }
+        ],
     }
