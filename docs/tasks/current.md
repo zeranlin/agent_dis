@@ -17,6 +17,7 @@
 - 已细化本体文档中的核心关系定义，开始向数据模型层收敛
 - 已形成 V1 产品范围定义草案，统一收敛边界、规则分层、输出结构、角色与流程
 - 已形成 V1 默认规则包 1.0 草案，明确默认内置规则集合
+- 已形成 V1 字段级数据模型草案，覆盖 8 个核心对象与最小关系链
 
 ## 当前结论
 
@@ -30,7 +31,8 @@
 - 细化审查报告输出结构
 - 细化风险卡片字段定义
 - 细化规则库字段模型
-- 继续把核心对象和核心关系收敛成字段级数据模型
+- 评估是否需要把规则依据从审查规则中单独拆出
+- 评估风险状态流转和多轮审查模型
 
 ## 阻塞或待确认
 
@@ -43,3 +45,4 @@
 - `docs/business/government-procurement-review-framework.md`
 - `docs/business/v1-product-scope-draft.md`
 - `docs/business/v1-default-rule-pack-draft.md`
+- `docs/business/v1-data-model-draft.md`
