@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models import build_review_result_record
+from app.result_presenter import extract_chapter_title, extract_clause_type, sort_risks_for_display
 from app.repository import JsonRepository
 
 
@@ -151,7 +152,7 @@ def build_report_markdown(
         )
         return "\n".join(lines)
 
-    for index, risk in enumerate(risks, start=1):
+    for index, risk in enumerate(sort_risks_for_display(risks), start=1):
         evidences = repository.list_evidences_by_risk(risk.risk_id)
         evidence_text = evidences[0].quoted_text if evidences else "无"
         evidence_note = evidences[0].evidence_note if evidences else "无"
@@ -162,8 +163,8 @@ def build_report_markdown(
                 f"- 风险标题：{risk.risk_title}",
                 f"- 风险级别：{risk.risk_level}",
                 f"- 规则域：{risk.rule_domain}",
-                f"- 章节上下文：{_extract_chapter_title(risk.location_label)}",
-                f"- 片段类型：{_extract_clause_type(risk.review_reasoning)}",
+                f"- 章节上下文：{extract_chapter_title(risk.location_label, default='无')}",
+                f"- 片段类型：{extract_clause_type(risk.review_reasoning, default='未标注')}",
                 f"- 命中位置：{risk.location_label}",
                 f"- 风险说明：{risk.risk_description}",
                 f"- 审查说明：{risk.review_reasoning}",
@@ -173,17 +174,3 @@ def build_report_markdown(
             ]
         )
     return "\n".join(lines)
-
-
-def _extract_chapter_title(location_label: str) -> str:
-    if " / " not in location_label:
-        return "无"
-    return location_label.split(" / ", 1)[0]
-
-
-def _extract_clause_type(review_reasoning: str) -> str:
-    if "条款片段" in review_reasoning:
-        return "条款片段"
-    if "段落片段" in review_reasoning:
-        return "段落片段"
-    return "未标注"

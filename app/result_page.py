@@ -33,6 +33,7 @@ ul { line-height: 1.8; }
 .section { margin-top: 22px; }
 .actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
 .buttonish { display: inline-block; padding: 10px 14px; border-radius: 999px; background: #214d38; color: #fffdf8; text-decoration: none; font-weight: 600; }
+.risk-item { margin-bottom: 12px; }
 @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
 """
 
@@ -49,8 +50,14 @@ ul { line-height: 1.8; }
         status_api_url = escape(str(payload["status_api_url"]))
         result_api_url = escape(str(payload["result_api_url"]))
         risk_items_html = "".join(
-            f"<li><strong>{escape(str(item['risk_title']))}</strong> | {escape(str(item['risk_level']))} | "
-            f"{escape(str(item['location_label']))}<br>{escape(str(item['risk_description']))}</li>"
+            "<li class=\"risk-item\">"
+            f"<strong>{escape(str(item['risk_title']))}</strong> | {escape(str(item['risk_level']))}<br>"
+            f"<span class=\"tiny\">章节上下文：{escape(str(item.get('chapter_title') or '未标注'))}</span><br>"
+            f"<span class=\"tiny\">片段类型：{escape(str(item.get('clause_type') or '未标注'))}</span><br>"
+            f"<span class=\"tiny\">命中位置：{escape(str(item['location_label']))}</span><br>"
+            f"{escape(str(item['risk_description']))}<br>"
+            f"<span class=\"tiny\">审查说明：{escape(str(item.get('review_reasoning') or '无'))}</span>"
+            "</li>"
             for item in top_risks
         ) or "<li>当前未识别到明显风险。</li>"
         download_links_html = "".join(

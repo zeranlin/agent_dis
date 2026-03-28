@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models import build_document_record, build_review_task
+from app.result_presenter import build_top_risk_payload, sort_risks_for_display
 from app.repository import JsonRepository
 
 
@@ -123,23 +124,7 @@ class UploadService:
         if result is None:
             raise ResultAccessError(404, "RESULT_NOT_FOUND", "审查结果不存在。")
         risks = self.repository.list_risks_by_task(task_id)
-        severity_order = {"高": 0, "中": 1, "低": 2}
-        top_risks = [
-            {
-                "risk_id": risk.risk_id,
-                "risk_title": risk.risk_title,
-                "risk_level": risk.risk_level,
-                "location_label": risk.location_label,
-                "chapter_title": _extract_chapter_title(risk.location_label),
-                "clause_type": _extract_clause_type(risk.review_reasoning),
-                "risk_description": risk.risk_description,
-                "review_reasoning": risk.review_reasoning,
-            }
-            for risk in sorted(
-                risks,
-                key=lambda item: (severity_order.get(item.risk_level, 9), item.created_at),
-            )[:3]
-        ]
+        top_risks = [build_top_risk_payload(risk) for risk in sort_risks_for_display(risks)[:3]]
         return result.to_result_response(file_name=task.file_name, top_risks=top_risks)
 
     def download_result_file(self, task_id: str, file_type: str) -> tuple[str, str, str]:
@@ -221,17 +206,3 @@ class UploadService:
         if file_type is None:
             raise UploadValidationError(415, "UNSUPPORTED_FILE_TYPE", "仅支持 PDF 或 Word 文件。")
         return file_type
-
-
-def _extract_chapter_title(location_label: str) -> str:
-    if " / " not in location_label:
-        return ""
-    return location_label.split(" / ", 1)[0]
-
-
-def _extract_clause_type(review_reasoning: str) -> str:
-    if "条款片段" in review_reasoning:
-        return "条款片段"
-    if "段落片段" in review_reasoning:
-        return "段落片段"
-    return ""

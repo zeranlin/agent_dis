@@ -45,6 +45,7 @@
 - `implementation-prep-round-18.md`：第十八轮实现准备，聚焦条款类型与章节上下文向审查输入的稳定传递
 - `implementation-prep-round-19.md`：第十九轮实现准备，聚焦最小执行闭环中的上下文解释增强
 - `implementation-prep-round-20.md`：第二十轮实现准备，聚焦结果接口与报告输出中的上下文说明一致性
+- `implementation-prep-round-21.md`：第二十一轮实现准备，聚焦结果页上下文消费与结果展示口径统一
 
 ## 当前规则
 
