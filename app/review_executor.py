@@ -52,6 +52,7 @@ class ReviewExecutor:
                     total_findings += 1
                     risk_id = f"risk_{uuid4().hex[:12]}"
                     evidence_id = f"evidence_{uuid4().hex[:12]}"
+                    clause_context = f"{clause.chapter_title}的{clause.clause_type}"
                     risk = build_risk_item_record(
                         risk_id=risk_id,
                         task_id=task.task_id,
@@ -60,8 +61,11 @@ class ReviewExecutor:
                         clause_id=clause.clause_id,
                         rule=rule,
                         location_label=clause.location_label,
-                        risk_description=f"条款中出现“{matched_keyword}”，命中规则 {rule['rule_code']}。",
-                        review_reasoning=f"当前最小执行骨架基于关键词“{matched_keyword}”命中规则。",
+                        risk_description=f"{clause_context}中出现“{matched_keyword}”，命中规则 {rule['rule_code']}。",
+                        review_reasoning=(
+                            f"当前最小执行骨架在“{clause.location_label}”识别到关键词“{matched_keyword}”，"
+                            f"并将其解释为{clause_context}命中规则。"
+                        ),
                     )
                     evidence = build_evidence_item_record(
                         evidence_id=evidence_id,
@@ -70,7 +74,7 @@ class ReviewExecutor:
                         clause_id=clause.clause_id,
                         quoted_text=clause.clause_text,
                         location_label=clause.location_label,
-                        evidence_note=f"原文包含关键词“{matched_keyword}”。",
+                        evidence_note=f"{clause_context}原文包含关键词“{matched_keyword}”。",
                     )
                     self.repository.save_risk(risk)
                     self.repository.save_evidence(evidence)

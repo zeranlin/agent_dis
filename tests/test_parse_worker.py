@@ -409,6 +409,10 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertEqual(len(runtime_input.rules), 12)
             self.assertGreaterEqual(len(runtime_input.clauses), 2)
             self.assertIn("risk_item_fields", runtime_input.output_schema)
+            self.assertIn("chapter_title", runtime_input.output_schema["risk_item_fields"])
+            self.assertIn("clause_type", runtime_input.output_schema["risk_item_fields"])
+            self.assertIn("chapter_title", runtime_input.output_schema["evidence_item_fields"])
+            self.assertIn("clause_type", runtime_input.output_schema["evidence_item_fields"])
             self.assertIn("政府采购招标文件合规审查智能体", runtime_input.prompt_text)
 
     def test_review_executor_consumes_review_queue_and_persists_intermediate_objects(self):
@@ -444,9 +448,13 @@ class ParseWorkerTestCase(unittest.TestCase):
             risks = repository.list_risks_by_task(upload_response["task_id"])
             self.assertGreaterEqual(len(risks), 2)
             self.assertIn(risks[0].rule_id, {"rule_v1_r1", "rule_v1_r9"})
+            self.assertIn("第", risks[0].risk_description)
+            self.assertIn("片段", risks[0].review_reasoning)
             evidences = repository.list_evidences_by_risk(risks[0].risk_id)
             self.assertEqual(len(evidences), 1)
             self.assertTrue(evidences[0].quoted_text)
+            self.assertIn("原文包含关键词", evidences[0].evidence_note)
+            self.assertIn("片段", evidences[0].evidence_note)
             self.assertEqual(list((Path(runtime_dir) / "queues" / "review").glob("*.json")), [])
             self.assertEqual(len(list((Path(runtime_dir) / "queues" / "result").glob("*.json"))), 1)
 

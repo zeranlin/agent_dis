@@ -43,6 +43,7 @@
 - `implementation-prep-round-16.md`：第十六轮实现准备，聚焦目录噪声过滤、DOCX 表格文本提取与切分输出衔接优化
 - `implementation-prep-round-17.md`：第十七轮实现准备，聚焦 DOCX 表格重复提取这一处最小缺口修复
 - `implementation-prep-round-18.md`：第十八轮实现准备，聚焦条款类型与章节上下文向审查输入的稳定传递
+- `implementation-prep-round-19.md`：第十九轮实现准备，聚焦最小执行闭环中的上下文解释增强
 
 ## 当前规则
 
