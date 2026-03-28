@@ -212,6 +212,9 @@ class ReviewResultRecord:
             "overall_conclusion": self.overall_conclusion,
             "conclusion_markdown": self.conclusion_markdown,
             "report_markdown": self.report_markdown,
+            "page_url": f"/review-tasks/{self.task_id}/page",
+            "status_api_url": f"/api/v1/review-tasks/{self.task_id}",
+            "result_api_url": f"/api/v1/review-tasks/{self.task_id}/result",
             "risk_count_summary": {
                 "high": self.risk_count_high,
                 "medium": self.risk_count_medium,

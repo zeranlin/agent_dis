@@ -178,6 +178,10 @@ class UploadService:
                 "risk_count_summary": result_payload["risk_count_summary"],
                 "top_risks": result_payload["top_risks"],
                 "downloadable_files": result_payload["downloadable_files"],
+                "status_api_url": result_payload["status_api_url"],
+                "result_api_url": result_payload["result_api_url"],
+                "page_url": result_payload["page_url"],
+                "generated_at": result_payload["generated_at"],
             }
 
         if task.internal_status == "failed":
@@ -188,6 +192,8 @@ class UploadService:
                 "file_name": task.file_name,
                 "message": task.status_message,
                 "error_code": task.error_code,
+                "status_api_url": f"/api/v1/review-tasks/{task_id}",
+                "page_url": f"/review-tasks/{task_id}/page",
             }
 
         return {
@@ -196,6 +202,9 @@ class UploadService:
             "title": "审查进行中",
             "file_name": task.file_name,
             "message": task.status_message,
+            "status_api_url": f"/api/v1/review-tasks/{task_id}",
+            "result_api_url": f"/api/v1/review-tasks/{task_id}/result",
+            "page_url": f"/review-tasks/{task_id}/page",
         }
 
     @staticmethod

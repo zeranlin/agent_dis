@@ -104,6 +104,10 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("结果页最小实现", html)
             self.assertIn("结果已生成", html)
             self.assertIn("重点风险摘要", html)
+            self.assertIn("快速操作", html)
+            self.assertIn("查看建议", html)
+            self.assertIn("/review-tasks/", html)
+            self.assertIn("/api/v1/review-tasks/", html)
             self.assertIn("最终结论.md", html)
             self.assertIn("审查报告.md", html)
 
@@ -166,6 +170,9 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("generated_at", result_payload)
             self.assertEqual(result_payload["risk_count_summary"]["high"], 2)
             self.assertGreaterEqual(len(result_payload["top_risks"]), 1)
+            self.assertIn("page_url", result_payload)
+            self.assertIn("status_api_url", result_payload)
+            self.assertIn("result_api_url", result_payload)
 
             with urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/report") as response:
                 report_content = response.read().decode("utf-8")
