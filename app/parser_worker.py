@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from uuid import uuid4
 
-from app.models import build_chapter_record, build_clause_record
+from app.document_parser import ParseFailure, parse_document
+from app.models import build_block_record, build_chapter_record, build_clause_record
 from app.repository import JsonRepository
-
-
-CHAPTER_PATTERN = re.compile(r"^(第[一二三四五六七八九十百]+章.*|\d+(?:\.\d+)*[、.].*)$")
-CLAUSE_PATTERN = re.compile(r"^(\d+(?:\.\d+){0,3}[、.]?.*|第[一二三四五六七八九十]+条.*)$")
 
 
 class ParseWorker:
@@ -35,47 +31,94 @@ class ParseWorker:
             task.transition_to("parsing", "系统正在解析文件结构。")
             self.repository.save_task(task)
 
-            raw_text = self._extract_text(Path(document.source_uri))
-            page_count = max(1, raw_text.count("\f") + 1)
-            chapter_segments = split_chapters(raw_text)
+            parsed_document_payload = parse_document(Path(document.source_uri))
             parsed_document = document.with_updates(
-                raw_text=raw_text,
+                raw_text=parsed_document_payload.raw_text,
                 parsed_status="parsed",
-                page_count=page_count,
+                page_count=parsed_document_payload.page_count,
             )
             self.repository.save_document(parsed_document)
 
+            section_id_mapping: dict[str, str] = {}
             clause_count = 0
-            for chapter_order, chapter_segment in enumerate(chapter_segments, start=1):
-                chapter_id = f"chapter_{uuid4().hex[:12]}"
-                chapter_record = build_chapter_record(
-                    chapter_id=chapter_id,
-                    document_id=document.document_id,
-                    chapter_title=chapter_segment["title"],
-                    chapter_order=chapter_order,
-                    chapter_text=chapter_segment["text"],
-                )
-                self.repository.save_chapter(chapter_record)
+            section_count = 0
 
-                clauses = split_clauses(chapter_segment["text"])
-                for clause_order, clause_text in enumerate(clauses, start=1):
-                    clause_count += 1
-                    self.repository.save_clause(
-                        build_clause_record(
-                            clause_id=f"clause_{uuid4().hex[:12]}",
-                            document_id=document.document_id,
+            for block in parsed_document_payload.blocks:
+                self.repository.save_block(
+                    build_block_record(
+                        block_id=block.block_id,
+                        document_id=document.document_id,
+                        block_type=block.block_type,
+                        title=block.title,
+                        text=block.text,
+                        source_page_start=block.source_page_start,
+                        source_page_end=block.source_page_end,
+                        order_index=block.order_index,
+                        parent_block_id=block.parent_block_id,
+                        source_anchor=block.source_anchor,
+                    )
+                )
+
+                if block.block_type == "section":
+                    section_count += 1
+                    chapter_id = f"chapter_{uuid4().hex[:12]}"
+                    section_id_mapping[block.block_id] = chapter_id
+                    self.repository.save_chapter(
+                        build_chapter_record(
                             chapter_id=chapter_id,
-                            clause_order=clause_order,
-                            clause_text=clause_text,
-                            location_label=f"{chapter_record.chapter_title}-条款{clause_order}",
+                            document_id=document.document_id,
+                            chapter_title=block.title,
+                            chapter_order=block.order_index,
+                            chapter_text=block.text,
                         )
                     )
+                    continue
 
-            task.transition_to("parsed", f"文件解析完成，已生成 {len(chapter_segments)} 个章节和 {clause_count} 个条款。")
+                parent_chapter_id = section_id_mapping.get(block.parent_block_id or "")
+                if parent_chapter_id is None:
+                    if not section_id_mapping:
+                        fallback_chapter_id = f"chapter_{uuid4().hex[:12]}"
+                        section_id_mapping["default"] = fallback_chapter_id
+                        self.repository.save_chapter(
+                            build_chapter_record(
+                                chapter_id=fallback_chapter_id,
+                                document_id=document.document_id,
+                                chapter_title="默认章节",
+                                chapter_order=1,
+                                chapter_text=parsed_document_payload.raw_text,
+                            )
+                        )
+                    parent_chapter_id = next(iter(section_id_mapping.values()))
+
+                clause_count += 1
+                location_anchor = block.source_anchor or block.title or f"片段{block.order_index}"
+                self.repository.save_clause(
+                    build_clause_record(
+                        clause_id=f"clause_{uuid4().hex[:12]}",
+                        document_id=document.document_id,
+                        chapter_id=parent_chapter_id,
+                        clause_order=block.order_index,
+                        clause_text=block.text,
+                        location_label=location_anchor,
+                    )
+                )
+
+            task.transition_to(
+                "parsed",
+                f"文件解析完成，已生成 {section_count} 个章节块和 {clause_count} 个可审查片段。",
+            )
             self.repository.save_task(task)
             task.transition_to("review_queued", "文件解析完成，系统即将开始规则审查。")
             self.repository.save_task(task)
             self.repository.enqueue_review_job(task)
+        except ParseFailure as exc:
+            self.repository.save_document(document.with_updates(parsed_status="failed"))
+            task.mark_failed(
+                error_code=exc.error_code,
+                error_message=exc.detail_message,
+                status_message=exc.user_message,
+            )
+            self.repository.save_task(task)
         except Exception as exc:
             self.repository.save_document(document.with_updates(parsed_status="failed"))
             task.mark_failed(
@@ -86,59 +129,3 @@ class ParseWorker:
             self.repository.save_task(task)
         finally:
             self.repository.delete_parse_job(job_path)
-
-    @staticmethod
-    def _extract_text(path: Path) -> str:
-        # 当前仅提供最小文本解码占位实现，还不等同于真实 PDF/Word 提取能力。
-        content = path.read_bytes()
-        for encoding in ("utf-8", "gb18030"):
-            try:
-                return content.decode(encoding)
-            except UnicodeDecodeError:
-                continue
-        return content.decode("utf-8", errors="ignore")
-
-
-def split_chapters(raw_text: str) -> list[dict[str, str]]:
-    stripped_lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-    if not stripped_lines:
-        return [{"title": "默认章节", "text": ""}]
-
-    chapters: list[dict[str, str]] = []
-    current_title = "默认章节"
-    current_lines: list[str] = []
-
-    for line in stripped_lines:
-        if CHAPTER_PATTERN.match(line):
-            if current_lines:
-                chapters.append({"title": current_title, "text": "\n".join(current_lines)})
-            current_title = line
-            current_lines = []
-            continue
-        current_lines.append(line)
-
-    if current_lines or not chapters:
-        chapters.append({"title": current_title, "text": "\n".join(current_lines)})
-
-    return chapters
-
-
-def split_clauses(chapter_text: str) -> list[str]:
-    stripped_lines = [line.strip() for line in chapter_text.splitlines() if line.strip()]
-    if not stripped_lines:
-        return [""]
-
-    clauses: list[str] = []
-    current_lines: list[str] = []
-
-    for line in stripped_lines:
-        if CLAUSE_PATTERN.match(line) and current_lines:
-            clauses.append("\n".join(current_lines))
-            current_lines = [line]
-            continue
-        current_lines.append(line)
-
-    if current_lines:
-        clauses.append("\n".join(current_lines))
-
-    return clauses

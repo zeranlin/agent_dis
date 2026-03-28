@@ -5,6 +5,7 @@ import threading
 from pathlib import Path
 
 from app.models import (
+    BlockRecord,
     ChapterRecord,
     ClauseRecord,
     DocumentRecord,
@@ -40,6 +41,7 @@ class JsonRepository:
         self.documents_path = self.metadata_dir / "documents.json"
         self.chapters_path = self.metadata_dir / "chapters.json"
         self.clauses_path = self.metadata_dir / "clauses.json"
+        self.blocks_path = self.metadata_dir / "blocks.json"
         self.risks_path = self.metadata_dir / "risks.json"
         self.evidences_path = self.metadata_dir / "evidences.json"
         self.results_path = self.metadata_dir / "results.json"
@@ -69,6 +71,18 @@ class JsonRepository:
 
     def save_clause(self, clause: ClauseRecord) -> None:
         self._update_json_mapping(self.clauses_path, clause.clause_id, clause.to_dict())
+
+    def save_block(self, block: BlockRecord) -> None:
+        self._update_json_mapping(self.blocks_path, block.block_id, block.to_dict())
+
+    def list_blocks_by_document(self, document_id: str) -> list[BlockRecord]:
+        blocks = self._read_json(self.blocks_path)
+        block_records = [
+            BlockRecord(**payload)
+            for payload in blocks.values()
+            if payload["document_id"] == document_id
+        ]
+        return sorted(block_records, key=lambda item: item.order_index)
 
     def list_clauses_by_document(self, document_id: str) -> list[ClauseRecord]:
         clauses = self._read_json(self.clauses_path)

@@ -127,6 +127,23 @@ class ClauseRecord:
 
 
 @dataclass
+class BlockRecord:
+    block_id: str
+    document_id: str
+    block_type: str
+    title: str
+    text: str
+    source_page_start: int
+    source_page_end: int
+    order_index: int
+    parent_block_id: str | None
+    source_anchor: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
 class RiskItemRecord:
     risk_id: str
     task_id: str
@@ -329,6 +346,33 @@ def build_clause_record(
         location_label=location_label,
         page_start=1,
         page_end=1,
+    )
+
+
+def build_block_record(
+    *,
+    block_id: str,
+    document_id: str,
+    block_type: str,
+    title: str,
+    text: str,
+    source_page_start: int,
+    source_page_end: int,
+    order_index: int,
+    parent_block_id: str | None,
+    source_anchor: str,
+) -> BlockRecord:
+    return BlockRecord(
+        block_id=block_id,
+        document_id=document_id,
+        block_type=block_type,
+        title=title,
+        text=text,
+        source_page_start=source_page_start,
+        source_page_end=source_page_end,
+        order_index=order_index,
+        parent_block_id=parent_block_id,
+        source_anchor=source_anchor,
     )
 
 
