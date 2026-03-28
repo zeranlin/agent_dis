@@ -113,6 +113,18 @@ class JsonRepository:
                 return ReviewResultRecord(**payload)
         return None
 
+    def read_report_markdown(self, task_id: str) -> str | None:
+        target_path = self.report_dir / f"{task_id}-审查报告.md"
+        if not target_path.exists():
+            return None
+        return target_path.read_text(encoding="utf-8")
+
+    def read_conclusion_markdown(self, task_id: str) -> str | None:
+        target_path = self.conclusion_dir / f"{task_id}-最终结论.md"
+        if not target_path.exists():
+            return None
+        return target_path.read_text(encoding="utf-8")
+
     def save_upload(self, task_id: str, file_name: str, content: bytes) -> Path:
         target_path = self.upload_dir / f"{task_id}-{file_name}"
         target_path.write_bytes(content)

@@ -103,11 +103,16 @@ def build_conclusion_markdown(
 ) -> str:
     return (
         "# 最终结论\n\n"
+        "## 文件概览\n\n"
         f"- 文件名称：{file_name}\n"
+        "\n## 结论摘要\n\n"
         f"- 总体结论：{overall_conclusion}\n"
+        "\n## 风险统计\n\n"
         f"- 高风险数量：{risk_count_high}\n"
         f"- 中风险数量：{risk_count_medium}\n"
         f"- 低风险数量：{risk_count_low}\n"
+        "\n## 处理建议\n\n"
+        "- 建议审核人员优先复核高风险与中风险条款，再结合原文证据完成人工判断。\n"
     )
 
 
@@ -128,6 +133,11 @@ def build_report_markdown(
         "## 总体结论",
         "",
         overall_conclusion,
+        "",
+        "## 报告说明",
+        "",
+        "- 本报告基于当前 V1 最小规则包和解析结果自动生成。",
+        "- 风险结论仅用于辅助审核，不直接替代人工定性。",
         "",
         "## 风险明细",
         "",

@@ -12,6 +12,7 @@ from uuid import uuid4
 from app.repository import JsonRepository
 from app.server import ReviewHTTPServer, create_service
 from app.upload_service import UploadFile, UploadProcessingError, UploadService
+from app.worker_runner import WorkerRunner
 
 
 def build_multipart_body(boundary: str, filename: str, content: bytes) -> bytes:
@@ -68,6 +69,77 @@ class TestServerContext:
 
 
 class UploadApiTestCase(unittest.TestCase):
+    def test_get_result_and_download_files_after_worker_run(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(
+                boundary,
+                "招标文件.docx",
+                (
+                    "第一章 资格要求\n"
+                    "1.1 供应商资格\n"
+                    "供应商须本地注册并在本地办公。\n"
+                    "第二章 评分办法\n"
+                    "2.1 评分标准\n"
+                    "采用综合评价并可酌情打分。\n"
+                ).encode("utf-8"),
+            )
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            task_id = payload["task_id"]
+            WorkerRunner(JsonRepository(server.runtime_dir), Path(__file__).resolve().parent.parent).run_until_idle()
+
+            with urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/result") as response:
+                result_payload = json.loads(response.read().decode("utf-8"))
+
+            self.assertEqual(result_payload["task_id"], task_id)
+            self.assertEqual(result_payload["status"], "completed")
+            self.assertEqual(len(result_payload["downloadable_files"]), 2)
+            self.assertIn("审查已完成", result_payload["summary_title"])
+
+            with urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/report") as response:
+                report_content = response.read().decode("utf-8")
+                report_headers = dict(response.headers.items())
+
+            self.assertIn("# 审查报告", report_content)
+            self.assertIn("## 报告说明", report_content)
+            self.assertIn("attachment;", report_headers["Content-Disposition"])
+
+            with urllib.request.urlopen(
+                f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/conclusion"
+            ) as response:
+                conclusion_content = response.read().decode("utf-8")
+
+            self.assertIn("# 最终结论", conclusion_content)
+            self.assertIn("## 风险统计", conclusion_content)
+
+    def test_result_endpoint_returns_409_when_not_ready(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(boundary, "招标文件.pdf", b"fake-pdf-content")
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            with self.assertRaises(urllib.error.HTTPError) as context:
+                urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{payload['task_id']}/result")
+
+            self.assertEqual(context.exception.code, 409)
+            error_payload = json.loads(context.exception.read().decode("utf-8"))
+            self.assertEqual(error_payload["error_code"], "RESULT_NOT_READY")
+
     def test_create_review_task_and_query_status(self):
         with TestServerContext() as server:
             boundary = f"boundary-{uuid4().hex}"

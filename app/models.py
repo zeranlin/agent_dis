@@ -198,6 +198,28 @@ class ReviewResultRecord:
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
+    def to_result_response(self, *, file_name: str) -> dict[str, object]:
+        return {
+            "task_id": self.task_id,
+            "status": self.status,
+            "file_name": file_name,
+            "summary_title": self.summary_title,
+            "overall_conclusion": self.overall_conclusion,
+            "report_markdown": self.report_markdown,
+            "downloadable_files": [
+                {
+                    "name": "最终结论.md",
+                    "type": "conclusion_markdown",
+                    "url": f"/api/v1/review-tasks/{self.task_id}/downloads/conclusion",
+                },
+                {
+                    "name": "审查报告.md",
+                    "type": "report_markdown",
+                    "url": f"/api/v1/review-tasks/{self.task_id}/downloads/report",
+                },
+            ],
+        }
+
 
 def build_review_task(
     *,

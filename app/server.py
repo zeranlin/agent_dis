@@ -8,9 +8,10 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.parse import quote
 
 from app.repository import JsonRepository
-from app.upload_service import UploadFile, UploadProcessingError, UploadService, UploadValidationError
+from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService, UploadValidationError
 
 
 def build_runtime_root() -> Path:
@@ -63,12 +64,40 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
-        prefix = "/api/v1/review-tasks/"
-        if not path.startswith(prefix):
+        task_prefix = "/api/v1/review-tasks/"
+        if not path.startswith(task_prefix):
             self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
             return
 
-        task_id = path.removeprefix(prefix)
+        if path.endswith("/result"):
+            task_id = path.removeprefix(task_prefix).removesuffix("/result")
+            if not task_id or "/" in task_id:
+                self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
+                return
+            try:
+                payload = self.server.upload_service.get_review_result(task_id)
+                self._write_json(HTTPStatus.OK, payload)
+            except ResultAccessError as exc:
+                status_code, payload = exc.to_response()
+                self._write_json(status_code, payload)
+            return
+
+        download_marker = "/downloads/"
+        if download_marker in path:
+            task_and_suffix = path.removeprefix(task_prefix)
+            task_id, _, file_type = task_and_suffix.partition(download_marker)
+            if not task_id or not file_type or "/" in task_id or "/" in file_type:
+                self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
+                return
+            try:
+                file_name, content_type, content = self.server.upload_service.download_result_file(task_id, file_type)
+                self._write_text(HTTPStatus.OK, content_type, content, download_name=file_name)
+            except ResultAccessError as exc:
+                status_code, payload = exc.to_response()
+                self._write_json(status_code, payload)
+            return
+
+        task_id = path.removeprefix(task_prefix)
         if not task_id or "/" in task_id:
             self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
             return
@@ -95,6 +124,21 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _write_text(self, status_code: int, content_type: str, content: str, *, download_name: str | None = None) -> None:
+        body = content.encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", content_type)
+        if download_name is not None:
+            ascii_name = "download.md"
+            if download_name.endswith(".md"):
+                ascii_name = "result.md"
+            encoded_name = quote(download_name)
+            disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
+            self.send_header("Content-Disposition", disposition)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

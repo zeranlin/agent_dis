@@ -42,6 +42,20 @@ class UploadProcessingError(Exception):
         }
 
 
+class ResultAccessError(Exception):
+    def __init__(self, status_code: int, error_code: str, error_message: str):
+        super().__init__(error_message)
+        self.status_code = status_code
+        self.error_code = error_code
+        self.error_message = error_message
+
+    def to_response(self) -> tuple[int, dict[str, str]]:
+        return self.status_code, {
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+        }
+
+
 @dataclass
 class UploadFile:
     filename: str
@@ -95,6 +109,37 @@ class UploadService:
         if task is None:
             return None
         return task.to_status_response()
+
+    def get_review_result(self, task_id: str) -> dict[str, object]:
+        task = self.repository.get_task(task_id)
+        if task is None:
+            raise ResultAccessError(404, "TASK_NOT_FOUND", "任务不存在。")
+        if task.internal_status != "completed":
+            raise ResultAccessError(409, "RESULT_NOT_READY", "审查结果尚未生成完成。")
+
+        result = self.repository.get_result_by_task(task_id)
+        if result is None:
+            raise ResultAccessError(404, "RESULT_NOT_FOUND", "审查结果不存在。")
+        return result.to_result_response(file_name=task.file_name)
+
+    def download_result_file(self, task_id: str, file_type: str) -> tuple[str, str, str]:
+        task = self.repository.get_task(task_id)
+        if task is None:
+            raise ResultAccessError(404, "TASK_NOT_FOUND", "任务不存在。")
+        if task.internal_status != "completed":
+            raise ResultAccessError(409, "RESULT_NOT_READY", "审查结果尚未生成完成。")
+
+        if file_type == "report":
+            content = self.repository.read_report_markdown(task_id)
+            if content is None:
+                raise ResultAccessError(404, "FILE_NOT_FOUND", "审查报告文件不存在。")
+            return "审查报告.md", "text/markdown; charset=utf-8", content
+        if file_type == "conclusion":
+            content = self.repository.read_conclusion_markdown(task_id)
+            if content is None:
+                raise ResultAccessError(404, "FILE_NOT_FOUND", "最终结论文件不存在。")
+            return "最终结论.md", "text/markdown; charset=utf-8", content
+        raise ResultAccessError(404, "DOWNLOAD_NOT_FOUND", "下载类型不存在。")
 
     @staticmethod
     def _validate_upload(upload_file: UploadFile) -> str:
