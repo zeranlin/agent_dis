@@ -10,7 +10,8 @@
 2. `docs/architecture.md`
 3. `docs/standards/repository-contract.md`
 4. `docs/standards/agent-quality-rules.md`
-5. `docs/runbooks/change-checklist.md`
+5. `docs/tasks/current.md`
+6. `docs/runbooks/change-checklist.md`
 
 然后执行：
 
@@ -33,6 +34,10 @@ make check
 - 编码规范：`docs/standards/coding.md`
 - 智能体质量评估规则：`docs/standards/agent-quality-rules.md`
 - 任务模板：`docs/templates/task-template.md`
+- 当前任务：`docs/tasks/current.md`
+- 待办池：`docs/tasks/backlog.md`
+- 已完成任务：`docs/tasks/done.md`
+- 任务状态模板：`docs/tasks/template.md`
 - 实验记录：`docs/logs/experiments.md`
 - 决策记录：`docs/logs/decisions.md`
 - 变更工作流：`docs/runbooks/change-checklist.md`

@@ -13,6 +13,10 @@
 - `docs/standards/agent-quality-rules.md`
 - `docs/runbooks/change-checklist.md`
 - `docs/templates/task-template.md`
+- `docs/tasks/current.md`
+- `docs/tasks/backlog.md`
+- `docs/tasks/done.md`
+- `docs/tasks/template.md`
 - `docs/logs/experiments.md`
 - `docs/logs/decisions.md`
 - `scripts/check-harness.sh`
@@ -25,6 +29,7 @@
 - `AGENTS.md` 必须保持为导航文件，而不是信息堆积区。
 - 任何长期有效的工作流变化都应同步更新 `docs/`。
 - 新工作必须能在模板、实验日志或决策日志中找到可追溯落点。
+- 当前任务状态必须能在 `docs/tasks/` 下找到明确记录。
 - `make check` 必须保持通过。
 - 仓库中的 Markdown 文档默认使用中文编写。
 

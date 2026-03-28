@@ -13,6 +13,10 @@ required_files=(
   "docs/standards/agent-quality-rules.md"
   "docs/runbooks/change-checklist.md"
   "docs/templates/task-template.md"
+  "docs/tasks/current.md"
+  "docs/tasks/backlog.md"
+  "docs/tasks/done.md"
+  "docs/tasks/template.md"
   "docs/logs/experiments.md"
   "docs/logs/decisions.md"
   "scripts/check-harness.sh"
@@ -30,6 +34,11 @@ done
 
 grep -q "make check" "${ROOT_DIR}/AGENTS.md" || {
   echo "AGENTS.md must direct agents to run make check" >&2
+  exit 1
+}
+
+grep -q "docs/tasks/current.md" "${ROOT_DIR}/AGENTS.md" || {
+  echo "AGENTS.md must direct agents to read docs/tasks/current.md" >&2
   exit 1
 }
 
