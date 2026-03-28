@@ -250,27 +250,43 @@ def _extract_docx_text(content: bytes) -> str:
     except ElementTree.ParseError as exc:
         raise ParseFailure("DOCUMENT_READ_FAILED", "文件无法读取", "DOCX XML 结构解析失败。") from exc
 
-    paragraphs: list[str] = []
-    for paragraph in root.findall(".//w:p", W_NAMESPACE):
-        texts = [node.text or "" for node in paragraph.findall(".//w:t", W_NAMESPACE)]
-        merged = "".join(texts).strip()
-        if merged:
-            paragraphs.append(merged)
+    body = root.find("./w:body", W_NAMESPACE)
+    if body is None:
+        raise ParseFailure("DOCUMENT_READ_FAILED", "文件无法读取", "DOCX 缺少正文内容。")
 
-    for table in root.findall(".//w:tbl", W_NAMESPACE):
-        row_values: list[str] = []
-        for row in table.findall(".//w:tr", W_NAMESPACE):
-            cell_values: list[str] = []
-            for cell in row.findall("./w:tc", W_NAMESPACE):
-                texts = [node.text or "" for node in cell.findall(".//w:t", W_NAMESPACE)]
-                merged = "".join(texts).strip()
-                if merged:
-                    cell_values.append(merged)
-            if cell_values:
-                row_values.append(" | ".join(cell_values))
-        if row_values:
-            paragraphs.extend(row_values)
+    paragraphs: list[str] = []
+    for child in body:
+        tag_name = child.tag.rsplit("}", 1)[-1]
+        if tag_name == "p":
+            merged = _extract_docx_paragraph_text(child)
+            if merged:
+                paragraphs.append(merged)
+            continue
+        if tag_name == "tbl":
+            paragraphs.extend(_extract_docx_table_rows(child))
     return "\n".join(paragraphs)
+
+
+def _extract_docx_paragraph_text(paragraph: ElementTree.Element) -> str:
+    texts = [node.text or "" for node in paragraph.findall(".//w:t", W_NAMESPACE)]
+    return "".join(texts).strip()
+
+
+def _extract_docx_table_rows(table: ElementTree.Element) -> list[str]:
+    row_values: list[str] = []
+    for row in table.findall("./w:tr", W_NAMESPACE):
+        cell_values: list[str] = []
+        for cell in row.findall("./w:tc", W_NAMESPACE):
+            paragraph_values = [
+                paragraph_text
+                for paragraph in cell.findall("./w:p", W_NAMESPACE)
+                if (paragraph_text := _extract_docx_paragraph_text(paragraph))
+            ]
+            if paragraph_values:
+                cell_values.append(" ".join(paragraph_values))
+        if cell_values:
+            row_values.append(" | ".join(cell_values))
+    return row_values
 
 
 def _extract_pdf_text(content: bytes) -> str:

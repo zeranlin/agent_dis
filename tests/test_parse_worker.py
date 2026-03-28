@@ -227,6 +227,8 @@ class ParseWorkerTestCase(unittest.TestCase):
             assert document is not None
             self.assertIn("评分项 | 综合评价", document.raw_text)
             self.assertIn("资格项 | 供应商须本地注册", document.raw_text)
+            self.assertEqual(document.raw_text.count("评分项 | 综合评价"), 1)
+            self.assertEqual(document.raw_text.count("资格项 | 供应商须本地注册"), 1)
 
     def test_parse_worker_builds_chapter_text_and_location_label_for_review(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
