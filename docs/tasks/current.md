@@ -36,6 +36,7 @@
 - 已建立 P 到 T、T 到总负责人的交接规则
 - 已建立问题路由对照表
 - 已建立三线程日常协作节奏 runbook
+- 已建立基于仓库文件和 git 的线程通信机制
 - 已建立 `docs/tech/v1/` 技术文档目录
 - 已形成 `P -> T` 正式交接包，统一收口当前范围、主流程、输入输出对象和验收口径
 - 已输出 V1 技术方案首包，覆盖系统设计、状态流转、接口草案、技术数据结构、开发计划与风险假设
@@ -109,6 +110,11 @@
 - `docs/runbooks/handoff-t-to-owner.md`
 - `docs/runbooks/question-routing.md`
 - `docs/runbooks/daily-collaboration-rhythm.md`
+- `docs/comms/README.md`
+- `docs/comms/inbox-owner.md`
+- `docs/comms/inbox-p.md`
+- `docs/comms/inbox-t.md`
+- `docs/comms/template.md`
 - `docs/business/government-procurement-compliance-overview.md`
 - `docs/business/government-procurement-compliance-ontology.md`
 - `docs/business/government-procurement-review-framework.md`
