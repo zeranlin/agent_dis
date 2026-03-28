@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import tempfile
 import threading
+import tempfile
 import unittest
 import urllib.error
 import urllib.request
@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.server import ReviewHTTPServer, create_service
+from app.upload_service import UploadFile
 
 
 def build_multipart_body(boundary: str, filename: str, content: bytes) -> bytes:
@@ -91,6 +92,9 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(status_payload["status"], "uploaded")
             queue_file = server.runtime_dir / "queues" / "parse" / f"{task_id}.json"
             self.assertTrue(queue_file.exists())
+            tasks_path = server.runtime_dir / "metadata" / "review_tasks.json"
+            task_payload = json.loads(tasks_path.read_text(encoding="utf-8"))
+            self.assertEqual(task_payload[task_id]["internal_status"], "upload_validated")
 
     def test_reject_unsupported_file_type(self):
         with TestServerContext() as server:
@@ -109,3 +113,30 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(context.exception.code, 415)
             payload = json.loads(context.exception.read().decode("utf-8"))
             self.assertEqual(payload["error_code"], "UNSUPPORTED_FILE_TYPE")
+
+    def test_repository_write_is_safe_under_concurrent_uploads(self):
+        with TestServerContext() as server:
+            service = create_service()
+            errors: list[Exception] = []
+            task_ids: list[str] = []
+
+            def worker(index: int) -> None:
+                try:
+                    payload = service.create_review_task(
+                        UploadFile(filename=f"招标文件-{index}.pdf", content=f"file-{index}".encode("utf-8"))
+                    )
+                    task_ids.append(payload["task_id"])
+                except Exception as exc:  # pragma: no cover - for failure capture only
+                    errors.append(exc)
+
+            threads = [threading.Thread(target=worker, args=(index,)) for index in range(8)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertFalse(errors)
+            self.assertEqual(len(task_ids), 8)
+            tasks_path = server.runtime_dir / "metadata" / "review_tasks.json"
+            task_payload = json.loads(tasks_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(task_payload), 8)

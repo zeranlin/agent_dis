@@ -45,6 +45,15 @@ class UploadService:
         project_id = f"project_{uuid4().hex[:12]}"
         document_id = f"document_{uuid4().hex[:12]}"
 
+        task = build_review_task(
+            task_id=task_id,
+            project_id=project_id,
+            document_id=document_id,
+            file_name=upload_file.filename,
+            file_type=file_type,
+        )
+        self.repository.save_task(task)
+
         stored_path = self.repository.save_upload(task_id, upload_file.filename, upload_file.content)
         document = build_document_record(
             document_id=document_id,
@@ -53,14 +62,8 @@ class UploadService:
             file_type=file_type,
             source_uri=str(stored_path),
         )
-        task = build_review_task(
-            task_id=task_id,
-            project_id=project_id,
-            document_id=document_id,
-            file_name=upload_file.filename,
-            file_type=file_type,
-        )
         self.repository.save_document(document)
+        task.transition_to("upload_validated", "文件已成功上传，系统即将开始审核。")
         self.repository.save_task(task)
         self.repository.enqueue_parse_job(task)
         return task.to_upload_response()

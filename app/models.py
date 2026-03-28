@@ -61,6 +61,12 @@ class ReviewTask:
             "message": self.status_message,
         }
 
+    def transition_to(self, internal_status: str, status_message: str) -> None:
+        self.internal_status = internal_status
+        self.status = OUTWARD_STATUS_BY_INTERNAL[internal_status]
+        self.status_message = status_message
+        self.updated_at = now_iso()
+
 
 @dataclass
 class DocumentRecord:
@@ -89,7 +95,7 @@ def build_review_task(
     file_type: str,
 ) -> ReviewTask:
     timestamp = now_iso()
-    internal_status = "upload_validated"
+    internal_status = "created"
     return ReviewTask(
         task_id=task_id,
         project_id=project_id,
@@ -98,7 +104,7 @@ def build_review_task(
         file_type=file_type,
         status=OUTWARD_STATUS_BY_INTERNAL[internal_status],
         internal_status=internal_status,
-        status_message="文件已成功上传，系统即将开始审核。",
+        status_message="任务已创建，正在校验上传文件。",
         error_code=None,
         error_message=None,
         retry_count=0,

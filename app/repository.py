@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 from app.models import DocumentRecord, ReviewTask
 
 
 class JsonRepository:
+    _locks: dict[Path, threading.Lock] = {}
+    _locks_guard = threading.Lock()
+
     def __init__(self, root_dir: Path):
         self.root_dir = root_dir
         self.metadata_dir = self.root_dir / "metadata"
@@ -19,9 +23,7 @@ class JsonRepository:
         self.documents_path = self.metadata_dir / "documents.json"
 
     def save_task(self, task: ReviewTask) -> None:
-        tasks = self._read_json(self.tasks_path)
-        tasks[task.task_id] = task.to_dict()
-        self._write_json(self.tasks_path, tasks)
+        self._update_json_mapping(self.tasks_path, task.task_id, task.to_dict())
 
     def get_task(self, task_id: str) -> ReviewTask | None:
         tasks = self._read_json(self.tasks_path)
@@ -31,9 +33,7 @@ class JsonRepository:
         return ReviewTask(**data)
 
     def save_document(self, document: DocumentRecord) -> None:
-        documents = self._read_json(self.documents_path)
-        documents[document.document_id] = document.to_dict()
-        self._write_json(self.documents_path, documents)
+        self._update_json_mapping(self.documents_path, document.document_id, document.to_dict())
 
     def save_upload(self, task_id: str, file_name: str, content: bytes) -> Path:
         target_path = self.upload_dir / f"{task_id}-{file_name}"
@@ -50,6 +50,20 @@ class JsonRepository:
         self._write_json(queue_path, payload)
         return queue_path
 
+    def _update_json_mapping(self, path: Path, record_id: str, payload: dict[str, object]) -> None:
+        lock = self._lock_for(path)
+        with lock:
+            current_payload = self._read_json(path)
+            current_payload[record_id] = payload
+            self._write_json(path, current_payload)
+
+    @classmethod
+    def _lock_for(cls, path: Path) -> threading.Lock:
+        with cls._locks_guard:
+            if path not in cls._locks:
+                cls._locks[path] = threading.Lock()
+            return cls._locks[path]
+
     @staticmethod
     def _read_json(path: Path) -> dict[str, object]:
         if not path.exists():
@@ -58,7 +72,9 @@ class JsonRepository:
 
     @staticmethod
     def _write_json(path: Path, payload: dict[str, object]) -> None:
-        path.write_text(
+        temp_path = path.with_suffix(f"{path.suffix}.tmp")
+        temp_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
         )
+        temp_path.replace(path)
