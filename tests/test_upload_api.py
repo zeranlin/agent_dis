@@ -191,6 +191,11 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("page_url", result_payload)
             self.assertIn("status_api_url", result_payload)
             self.assertIn("result_api_url", result_payload)
+            self.assertIn("chapter_title", result_payload["top_risks"][0])
+            self.assertIn("clause_type", result_payload["top_risks"][0])
+            self.assertIn("review_reasoning", result_payload["top_risks"][0])
+            self.assertTrue(result_payload["top_risks"][0]["chapter_title"])
+            self.assertTrue(result_payload["top_risks"][0]["clause_type"])
 
             with urllib.request.urlopen(f"{server.base_url}/api/v1/review-tasks/{task_id}/downloads/report") as response:
                 report_content = response.read().decode("utf-8")
@@ -198,6 +203,8 @@ class UploadApiTestCase(unittest.TestCase):
 
             self.assertIn("# 审查报告", report_content)
             self.assertIn("## 报告说明", report_content)
+            self.assertIn("章节上下文", report_content)
+            self.assertIn("片段类型", report_content)
             self.assertIn("attachment;", report_headers["Content-Disposition"])
 
             with urllib.request.urlopen(

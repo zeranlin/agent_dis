@@ -130,7 +130,10 @@ class UploadService:
                 "risk_title": risk.risk_title,
                 "risk_level": risk.risk_level,
                 "location_label": risk.location_label,
+                "chapter_title": _extract_chapter_title(risk.location_label),
+                "clause_type": _extract_clause_type(risk.review_reasoning),
                 "risk_description": risk.risk_description,
+                "review_reasoning": risk.review_reasoning,
             }
             for risk in sorted(
                 risks,
@@ -218,3 +221,17 @@ class UploadService:
         if file_type is None:
             raise UploadValidationError(415, "UNSUPPORTED_FILE_TYPE", "仅支持 PDF 或 Word 文件。")
         return file_type
+
+
+def _extract_chapter_title(location_label: str) -> str:
+    if " / " not in location_label:
+        return ""
+    return location_label.split(" / ", 1)[0]
+
+
+def _extract_clause_type(review_reasoning: str) -> str:
+    if "条款片段" in review_reasoning:
+        return "条款片段"
+    if "段落片段" in review_reasoning:
+        return "段落片段"
+    return ""

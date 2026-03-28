@@ -497,6 +497,8 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("高风险问题", result.overall_conclusion)
             self.assertIn("# 审查报告", result.report_markdown)
             self.assertIn("# 最终结论", result.conclusion_markdown)
+            self.assertIn("- 章节上下文：第一章 资格要求", result.report_markdown)
+            self.assertIn("- 片段类型：条款片段", result.report_markdown)
             self.assertTrue(Path(result.report_file_path).exists())
             self.assertTrue(Path(result.conclusion_file_path).exists())
             self.assertEqual(list((Path(runtime_dir) / "queues" / "result").glob("*.json")), [])
