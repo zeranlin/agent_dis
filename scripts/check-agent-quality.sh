@@ -40,6 +40,9 @@ check_file_contains "docs/logs/decisions.md" "影响："
 check_file_contains "docs/standards/agent-quality-rules.md" "## 评分维度"
 check_file_contains "docs/standards/agent-quality-rules.md" "## 最小契约"
 check_file_contains "docs/standards/agent-quality-rules.md" "## 审阅问题"
+check_file_contains "docs/standards/coding.md" "## Mermaid 图规范"
+check_file_contains "docs/standards/coding.md" "graph LR"
+check_file_contains "docs/standards/coding.md" "subgraph"
 
 md_files=(
   "README.md"
