@@ -69,6 +69,42 @@ class TestServerContext:
 
 
 class UploadApiTestCase(unittest.TestCase):
+    def test_result_page_payload_keeps_canonical_fields_for_reviewing_task(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            service = UploadService(repository)
+            upload_response = service.create_review_task(
+                UploadFile(filename="招标文件.pdf", content=b"fake-pdf-content")
+            )
+
+            reviewing_payload = service.get_result_page_payload(upload_response["task_id"])
+
+            self.assertEqual(reviewing_payload["page_state"], "reviewing")
+            self.assertEqual(reviewing_payload["summary_title"], "审查进行中")
+            self.assertEqual(reviewing_payload["summary_title"], reviewing_payload["title"])
+            self.assertEqual(reviewing_payload["overall_conclusion"], reviewing_payload["message"])
+
+    def test_result_page_payload_keeps_canonical_fields_for_failed_task(self):
+        class FailingDocumentRepository(JsonRepository):
+            def save_document(self, document):  # type: ignore[override]
+                raise OSError("document write failed")
+
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = FailingDocumentRepository(Path(runtime_dir))
+            service = UploadService(repository)
+
+            with self.assertRaises(UploadProcessingError):
+                service.create_review_task(UploadFile(filename="招标文件.pdf", content=b"fake-pdf-content"))
+
+            task_payload = json.loads((Path(runtime_dir) / "metadata" / "review_tasks.json").read_text(encoding="utf-8"))
+            task_id = next(iter(task_payload.keys()))
+            failed_payload = service.get_result_page_payload(task_id)
+
+            self.assertEqual(failed_payload["page_state"], "failed")
+            self.assertEqual(failed_payload["summary_title"], "审查未完成")
+            self.assertEqual(failed_payload["summary_title"], failed_payload["title"])
+            self.assertEqual(failed_payload["overall_conclusion"], failed_payload["message"])
+
     def test_result_page_payload_keeps_canonical_result_fields(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             repository = JsonRepository(Path(runtime_dir))

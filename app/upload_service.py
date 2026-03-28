@@ -5,7 +5,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models import build_document_record, build_review_task
-from app.result_presenter import build_top_risk_payload, sort_risks_for_display
+from app.result_presenter import (
+    build_completed_page_payload,
+    build_failed_page_payload,
+    build_reviewing_page_payload,
+    build_top_risk_payload,
+    sort_risks_for_display,
+)
 from app.repository import JsonRepository
 
 
@@ -155,51 +161,21 @@ class UploadService:
 
         if task.internal_status == "completed":
             result_payload = self.get_review_result(task_id)
-            return {
-                "page_state": "completed",
-                "status_label": "结果已生成",
-                "summary_title": str(result_payload["summary_title"]),
-                "overall_conclusion": str(result_payload["overall_conclusion"]),
-                "title": str(result_payload["summary_title"]),
-                "file_name": task.file_name,
-                "message": str(result_payload["overall_conclusion"]),
-                "conclusion_markdown": result_payload["conclusion_markdown"],
-                "report_markdown": result_payload["report_markdown"],
-                "risk_count_summary": result_payload["risk_count_summary"],
-                "top_risks": result_payload["top_risks"],
-                "downloadable_files": result_payload["downloadable_files"],
-                "status_api_url": result_payload["status_api_url"],
-                "result_api_url": result_payload["result_api_url"],
-                "page_url": result_payload["page_url"],
-                "generated_at": result_payload["generated_at"],
-            }
+            return build_completed_page_payload(result_payload=result_payload, file_name=task.file_name)
 
         if task.internal_status == "failed":
-            return {
-                "page_state": "failed",
-                "status_label": "任务失败",
-                "summary_title": "审查未完成",
-                "overall_conclusion": task.status_message,
-                "title": "审查未完成",
-                "file_name": task.file_name,
-                "message": task.status_message,
-                "error_code": task.error_code,
-                "status_api_url": f"/api/v1/review-tasks/{task_id}",
-                "page_url": f"/review-tasks/{task_id}/page",
-            }
+            return build_failed_page_payload(
+                task_id=task_id,
+                file_name=task.file_name,
+                status_message=task.status_message,
+                error_code=task.error_code,
+            )
 
-        return {
-            "page_state": "reviewing",
-            "status_label": "审核中",
-            "summary_title": "审查进行中",
-            "overall_conclusion": task.status_message,
-            "title": "审查进行中",
-            "file_name": task.file_name,
-            "message": task.status_message,
-            "status_api_url": f"/api/v1/review-tasks/{task_id}",
-            "result_api_url": f"/api/v1/review-tasks/{task_id}/result",
-            "page_url": f"/review-tasks/{task_id}/page",
-        }
+        return build_reviewing_page_payload(
+            task_id=task_id,
+            file_name=task.file_name,
+            status_message=task.status_message,
+        )
 
     @staticmethod
     def _validate_upload(upload_file: UploadFile) -> str:

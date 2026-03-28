@@ -48,6 +48,7 @@
 - `implementation-prep-round-21.md`：第二十一轮实现准备，聚焦结果页上下文消费与结果展示口径统一
 - `implementation-prep-round-22.md`：第二十二轮实现准备，聚焦下载对象口径统一与结果页快速操作收口
 - `implementation-prep-round-23.md`：第二十三轮实现准备，聚焦页面结果对象规范字段保留与技术接口文档收口
+- `implementation-prep-round-24.md`：第二十四轮实现准备，聚焦结果页对象定义与消费口径整主题收口
 
 ## 当前规则
 

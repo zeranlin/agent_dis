@@ -279,6 +279,32 @@ V1 首版至少要持久化：
 | `overall_conclusion` | `review_result.overall_conclusion` |
 | `report_markdown` | `review_result.report_markdown` |
 
+### 9.1 结果页对象补充映射
+
+当前最小代码实现另外存在一个服务端渲染结果页对象，可视为页面层 view model。
+
+建议字段：
+
+| 页面对象字段 | 来源对象 |
+| --- | --- |
+| `page_state` | 页面状态机派生值 |
+| `status_label` | 页面状态文案 |
+| `summary_title` | `review_result.summary_title` 或固定状态标题 |
+| `overall_conclusion` | `review_result.overall_conclusion` 或 `review_task.status_message` |
+| `title` | `summary_title` 的兼容别名 |
+| `message` | `overall_conclusion` 的兼容别名 |
+| `file_name` | `procurement_document.document_name` |
+| `conclusion_markdown` | `review_result.conclusion_markdown` |
+| `report_markdown` | `review_result.report_markdown` |
+| `risk_count_summary` | `review_result` 聚合字段映射 |
+| `top_risks` | `risk_item` 展示摘要 |
+| `downloadable_files` | 结果下载对象列表 |
+
+技术说明：
+
+- `summary_title` 与 `overall_conclusion` 是当前页面对象的规范字段
+- `title` 与 `message` 当前保留为兼容字段，后续如页面消费完全收口，可再决定是否移除
+
 ## 10. 当前结论
 
 V1 技术数据结构在业务 8 个核心对象基础上补入 `review_task`，就足以支撑异步执行、状态查询和结果交付。首版重点不是把模型做重，而是把主链路上的对象关系固定下来。

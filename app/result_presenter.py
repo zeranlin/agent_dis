@@ -57,3 +57,71 @@ def build_downloadable_file_payloads(task_id: str) -> list[dict[str, str]]:
             "url": f"/api/v1/review-tasks/{task_id}/downloads/report",
         },
     ]
+
+
+def build_completed_page_payload(
+    *,
+    result_payload: dict[str, object],
+    file_name: str,
+) -> dict[str, object]:
+    summary_title = str(result_payload["summary_title"])
+    overall_conclusion = str(result_payload["overall_conclusion"])
+    return {
+        "page_state": "completed",
+        "status_label": "结果已生成",
+        "summary_title": summary_title,
+        "overall_conclusion": overall_conclusion,
+        "title": summary_title,
+        "file_name": file_name,
+        "message": overall_conclusion,
+        "conclusion_markdown": result_payload["conclusion_markdown"],
+        "report_markdown": result_payload["report_markdown"],
+        "risk_count_summary": result_payload["risk_count_summary"],
+        "top_risks": result_payload["top_risks"],
+        "downloadable_files": result_payload["downloadable_files"],
+        "status_api_url": result_payload["status_api_url"],
+        "result_api_url": result_payload["result_api_url"],
+        "page_url": result_payload["page_url"],
+        "generated_at": result_payload["generated_at"],
+    }
+
+
+def build_failed_page_payload(
+    *,
+    task_id: str,
+    file_name: str,
+    status_message: str,
+    error_code: str | None,
+) -> dict[str, object]:
+    return {
+        "page_state": "failed",
+        "status_label": "任务失败",
+        "summary_title": "审查未完成",
+        "overall_conclusion": status_message,
+        "title": "审查未完成",
+        "file_name": file_name,
+        "message": status_message,
+        "error_code": error_code,
+        "status_api_url": f"/api/v1/review-tasks/{task_id}",
+        "page_url": f"/review-tasks/{task_id}/page",
+    }
+
+
+def build_reviewing_page_payload(
+    *,
+    task_id: str,
+    file_name: str,
+    status_message: str,
+) -> dict[str, object]:
+    return {
+        "page_state": "reviewing",
+        "status_label": "审核中",
+        "summary_title": "审查进行中",
+        "overall_conclusion": status_message,
+        "title": "审查进行中",
+        "file_name": file_name,
+        "message": status_message,
+        "status_api_url": f"/api/v1/review-tasks/{task_id}",
+        "result_api_url": f"/api/v1/review-tasks/{task_id}/result",
+        "page_url": f"/review-tasks/{task_id}/page",
+    }
