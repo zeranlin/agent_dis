@@ -42,6 +42,16 @@
 
 任务状态层的作用是把“正在做什么、做到哪里、下一步是什么”明确留在仓库中，而不是仅保留在聊天上下文里。
 
+当前对任务状态层进一步约定如下：
+
+- `docs/tasks/current.md` 是全局当前状态总板，不是任何单一角色的专用工作面
+- 总负责人、产品经理 P、技术负责人 T 都可以更新 `docs/tasks/current.md`
+- 但只有在“一轮工作已完成、准备正式回提或正式收口”时才更新 `docs/tasks/current.md`
+- 日常推进时，各角色优先维护自己的短状态文件，而不是频繁改动 `docs/tasks/current.md`
+- 总负责人默认工作面是 `docs/tasks/owner-now.md`
+- 产品经理 P 默认工作面是 `docs/tasks/p-now.md`
+- 技术负责人 T 默认工作面是 `docs/tasks/t-now.md`
+
 ## 当前系统分层
 
 当前仓库分为四层。

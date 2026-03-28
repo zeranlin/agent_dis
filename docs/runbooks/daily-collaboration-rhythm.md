@@ -156,6 +156,15 @@ T 完成一轮后，至少应补：
 
 `docs/tasks/current.md` 是三线程共享的当前状态总板，但在低 token 模式下，它不再是每轮默认第一入口。
 
+进一步约定：
+
+- `docs/tasks/current.md` 是全局状态面
+- `docs/tasks/owner-now.md`、`docs/tasks/p-now.md`、`docs/tasks/t-now.md` 是角色工作面
+- 技术负责人 T 可以更新 `docs/tasks/current.md`
+- 但技术负责人 T 只应在“一轮实现完成并准备回提”时更新 `docs/tasks/current.md`
+- 日常推进过程中，技术负责人 T 应优先更新 `docs/tasks/t-now.md`
+- 总负责人在复审后负责统一收口 `docs/tasks/current.md`、`docs/status/summary.md` 与 `docs/comms/inbox-*.md`
+
 建议每轮至少更新以下内容：
 
 - 当前目标

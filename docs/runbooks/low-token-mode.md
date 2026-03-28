@@ -50,6 +50,13 @@
 - `docs/tasks/t-now.md`：技术负责人 T 短状态
 - `docs/status/summary.md`：全局超短摘要
 
+补充规则：
+
+- `current.md` 是全局面，不是技术负责人 T 的日常主工作面
+- T 可以改 `current.md`，但只在“完成一轮实现并准备回提”时改
+- 平时推进阶段，T 优先改 `docs/tasks/t-now.md`
+- 总负责人复审后，再统一收口 `current.md`、`summary.md` 与 `inbox-*`
+
 ## 推荐写法
 
 更省 token 的表达方式：
