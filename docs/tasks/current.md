@@ -43,8 +43,8 @@
 - `docs/business/government-procurement-compliance-overview.md`
 - `docs/business/government-procurement-compliance-ontology.md`
 - `docs/business/government-procurement-review-framework.md`
-- `docs/business/v1-product-scope-draft.md`
-- `docs/business/v1-default-rule-pack-draft.md`
-- `docs/business/v1-data-model-draft.md`
-- `docs/business/v1-main-flow-draft.md`
-- `docs/business/v1-overall-solution-draft.md`
+- `docs/business/v1/product-scope.md`
+- `docs/business/v1/default-rule-pack.md`
+- `docs/business/v1/data-model.md`
+- `docs/business/v1/main-flow.md`
+- `docs/business/v1/overall-solution.md`
