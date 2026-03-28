@@ -67,6 +67,11 @@ class ReviewTask:
         self.status_message = status_message
         self.updated_at = now_iso()
 
+    def mark_failed(self, error_code: str, error_message: str, status_message: str) -> None:
+        self.transition_to("failed", status_message)
+        self.error_code = error_code
+        self.error_message = error_message
+
 
 @dataclass
 class DocumentRecord:

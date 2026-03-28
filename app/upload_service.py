@@ -29,6 +29,19 @@ class UploadValidationError(Exception):
         }
 
 
+class UploadProcessingError(Exception):
+    def __init__(self, error_code: str, error_message: str):
+        super().__init__(error_message)
+        self.error_code = error_code
+        self.error_message = error_message
+
+    def to_response(self) -> tuple[int, dict[str, str]]:
+        return 500, {
+            "error_code": self.error_code,
+            "error_message": self.error_message,
+        }
+
+
 @dataclass
 class UploadFile:
     filename: str
@@ -54,19 +67,28 @@ class UploadService:
         )
         self.repository.save_task(task)
 
-        stored_path = self.repository.save_upload(task_id, upload_file.filename, upload_file.content)
-        document = build_document_record(
-            document_id=document_id,
-            project_id=project_id,
-            file_name=upload_file.filename,
-            file_type=file_type,
-            source_uri=str(stored_path),
-        )
-        self.repository.save_document(document)
-        task.transition_to("upload_validated", "文件已成功上传，系统即将开始审核。")
-        self.repository.save_task(task)
-        self.repository.enqueue_parse_job(task)
-        return task.to_upload_response()
+        try:
+            stored_path = self.repository.save_upload(task_id, upload_file.filename, upload_file.content)
+            document = build_document_record(
+                document_id=document_id,
+                project_id=project_id,
+                file_name=upload_file.filename,
+                file_type=file_type,
+                source_uri=str(stored_path),
+            )
+            self.repository.save_document(document)
+            task.transition_to("upload_validated", "文件已成功上传，系统即将开始审核。")
+            self.repository.save_task(task)
+            self.repository.enqueue_parse_job(task)
+            return task.to_upload_response()
+        except Exception as exc:
+            task.mark_failed(
+                error_code="UPLOAD_PERSIST_FAILED",
+                error_message=str(exc),
+                status_message="文件落地失败，任务已终止，请重新提交。",
+            )
+            self.repository.save_task(task)
+            raise UploadProcessingError("UPLOAD_PERSIST_FAILED", "文件落地失败，请重新提交。") from exc
 
     def get_review_task_status(self, task_id: str) -> dict[str, str | None] | None:
         task = self.repository.get_task(task_id)

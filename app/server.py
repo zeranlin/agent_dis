@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from app.repository import JsonRepository
-from app.upload_service import UploadFile, UploadService, UploadValidationError
+from app.upload_service import UploadFile, UploadProcessingError, UploadService, UploadValidationError
 
 
 def build_runtime_root() -> Path:
@@ -55,6 +55,9 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             response = self.server.upload_service.create_review_task(upload_file)
             self._write_json(HTTPStatus.CREATED, response)
         except UploadValidationError as exc:
+            status_code, payload = exc.to_response()
+            self._write_json(status_code, payload)
+        except UploadProcessingError as exc:
             status_code, payload = exc.to_response()
             self._write_json(status_code, payload)
 

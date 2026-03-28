@@ -9,8 +9,9 @@ import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
+from app.repository import JsonRepository
 from app.server import ReviewHTTPServer, create_service
-from app.upload_service import UploadFile
+from app.upload_service import UploadFile, UploadProcessingError, UploadService
 
 
 def build_multipart_body(boundary: str, filename: str, content: bytes) -> bytes:
@@ -140,3 +141,24 @@ class UploadApiTestCase(unittest.TestCase):
             tasks_path = server.runtime_dir / "metadata" / "review_tasks.json"
             task_payload = json.loads(tasks_path.read_text(encoding="utf-8"))
             self.assertEqual(len(task_payload), 8)
+
+    def test_mark_task_failed_when_document_persist_fails(self):
+        class FailingDocumentRepository(JsonRepository):
+            def save_document(self, document):  # type: ignore[override]
+                raise OSError("document write failed")
+
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = FailingDocumentRepository(Path(runtime_dir))
+            service = UploadService(repository)
+
+            with self.assertRaises(UploadProcessingError) as context:
+                service.create_review_task(UploadFile(filename="招标文件.pdf", content=b"fake-pdf-content"))
+
+            self.assertEqual(context.exception.error_code, "UPLOAD_PERSIST_FAILED")
+            tasks_path = Path(runtime_dir) / "metadata" / "review_tasks.json"
+            task_payload = json.loads(tasks_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(task_payload), 1)
+            saved_task = next(iter(task_payload.values()))
+            self.assertEqual(saved_task["internal_status"], "failed")
+            self.assertEqual(saved_task["status"], "failed")
+            self.assertEqual(saved_task["error_code"], "UPLOAD_PERSIST_FAILED")
