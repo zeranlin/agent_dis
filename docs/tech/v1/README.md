@@ -32,6 +32,7 @@
 - `implementation-prep-round-5.md`：第五轮实现准备，聚焦最小 worker 运行入口、运行闭环测试与闭环表述收口
 - `implementation-prep-round-6.md`：第六轮实现准备，聚焦结果查询接口、下载接口与报告模板稳定化
 - `implementation-prep-round-7.md`：第七轮实现准备，聚焦结果页接入字段明确化、关键错误场景处理与模板后续稳定化
+- `implementation-prep-round-8.md`：第八轮实现准备，聚焦结果页最小实现落点、字段消费方式与页面级错误交互
 
 ## 当前规则
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.parse import quote
 
+from app.result_page import render_result_page
 from app.repository import JsonRepository
 from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService, UploadValidationError
 
@@ -64,6 +65,22 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path.startswith("/review-tasks/") and path.endswith("/page"):
+            task_id = path.removeprefix("/review-tasks/").removesuffix("/page")
+            if not task_id or "/" in task_id:
+                self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "PAGE_NOT_FOUND", "error_message": "结果页不存在。"})
+                return
+            try:
+                payload = self.server.upload_service.get_result_page_payload(task_id)
+                self._write_html(HTTPStatus.OK, render_result_page(payload))
+            except ResultAccessError as exc:
+                if exc.error_code == "TASK_NOT_FOUND":
+                    self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "PAGE_NOT_FOUND", "error_message": "结果页不存在。"})
+                else:
+                    status_code, payload = exc.to_response()
+                    self._write_json(status_code, payload)
+            return
+
         task_prefix = "/api/v1/review-tasks/"
         if not path.startswith(task_prefix):
             self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
@@ -139,6 +156,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
             encoded_name = quote(download_name)
             disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
             self.send_header("Content-Disposition", disposition)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _write_html(self, status_code: int, content: str) -> None:
+        body = content.encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

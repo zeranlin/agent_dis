@@ -204,6 +204,12 @@
 | 审核状态对象 | `GET /api/v1/review-tasks/{task_id}` |
 | 审查结果对象 | `GET /api/v1/review-tasks/{task_id}/result` |
 
+当前最小代码实现另外补充了一个结果页验证入口：
+
+- `GET /review-tasks/{task_id}/page`
+
+该入口用于服务端渲染最小结果页，验证字段消费和页面级错误交互，不替代正式 API。
+
 ## 8. 版本控制建议
 
 - 路径统一带 `v1`

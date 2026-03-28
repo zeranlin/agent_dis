@@ -69,6 +69,63 @@ class TestServerContext:
 
 
 class UploadApiTestCase(unittest.TestCase):
+    def test_result_page_renders_completed_task(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(
+                boundary,
+                "招标文件.docx",
+                (
+                    "第一章 资格要求\n"
+                    "1.1 供应商资格\n"
+                    "供应商须本地注册并在本地办公。\n"
+                    "第二章 评分办法\n"
+                    "2.1 评分标准\n"
+                    "采用综合评价并可酌情打分。\n"
+                ).encode("utf-8"),
+            )
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            task_id = payload["task_id"]
+            WorkerRunner(JsonRepository(server.runtime_dir), Path(__file__).resolve().parent.parent).run_until_idle()
+
+            with urllib.request.urlopen(f"{server.base_url}/review-tasks/{task_id}/page") as response:
+                html = response.read().decode("utf-8")
+                headers = dict(response.headers.items())
+
+            self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+            self.assertIn("结果页最小实现", html)
+            self.assertIn("结果已生成", html)
+            self.assertIn("重点风险摘要", html)
+            self.assertIn("最终结论.md", html)
+            self.assertIn("审查报告.md", html)
+
+    def test_result_page_renders_reviewing_task_feedback(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(boundary, "招标文件.pdf", b"fake-pdf-content")
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            with urllib.request.urlopen(f"{server.base_url}/review-tasks/{payload['task_id']}/page") as response:
+                html = response.read().decode("utf-8")
+
+            self.assertIn("审核中", html)
+            self.assertIn("建议：页面可继续轮询结果接口", html)
+
     def test_get_result_and_download_files_after_worker_run(self):
         with TestServerContext() as server:
             boundary = f"boundary-{uuid4().hex}"
@@ -202,6 +259,37 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(context.exception.code, 404)
             error_payload = json.loads(context.exception.read().decode("utf-8"))
             self.assertEqual(error_payload["error_code"], "DOWNLOAD_NOT_FOUND")
+
+    def test_result_page_renders_failed_task_feedback(self):
+        class FailingDocumentRepository(JsonRepository):
+            def save_document(self, document):  # type: ignore[override]
+                raise OSError("document write failed")
+
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = FailingDocumentRepository(Path(runtime_dir))
+            service = UploadService(repository)
+
+            with self.assertRaises(UploadProcessingError):
+                service.create_review_task(UploadFile(filename="招标文件.pdf", content=b"fake-pdf-content"))
+
+            task_payload = json.loads((Path(runtime_dir) / "metadata" / "review_tasks.json").read_text(encoding="utf-8"))
+            task_id = next(iter(task_payload.keys()))
+
+            server = ReviewHTTPServer(("127.0.0.1", 0), service)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                host, port = server.server_address
+                with urllib.request.urlopen(f"http://{host}:{port}/review-tasks/{task_id}/page") as response:
+                    html = response.read().decode("utf-8")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+            self.assertIn("任务失败", html)
+            self.assertIn("错误码", html)
+            self.assertIn("重新提交文件", html)
 
     def test_create_review_task_and_query_status(self):
         with TestServerContext() as server:
