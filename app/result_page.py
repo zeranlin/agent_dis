@@ -59,12 +59,12 @@ ul { line-height: 1.8; }
         )
         body = f"""
 <div class="panel">
-  <div class="eyebrow">结果页最小实现</div>
+  <div class="eyebrow">结果查看页</div>
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
-  <p class="tiny">结果生成时间：{generated_at}</p>
+  <p class="tiny">结果生成时间：{generated_at}。建议先浏览风险概览，再查看详细结论。</p>
   <div class="grid">
     <div class="card"><h3>高风险</h3><p>{escape(str(risk_count_summary["high"]))}</p></div>
     <div class="card"><h3>中风险</h3><p>{escape(str(risk_count_summary["medium"]))}</p></div>
@@ -73,11 +73,11 @@ ul { line-height: 1.8; }
   <div class="split">
     <div>
       <div class="section">
-      <h2>建议阅读顺序</h2>
-      <p class="tiny">先看风险统计，再看重点风险摘要，最后查看完整结论和审查报告。</p>
+      <h2>建议先这样看</h2>
+      <p class="tiny">先看风险统计，再看重点风险摘要，最后查看完整结论和审查报告，会更容易把握重点。</p>
       </div>
       <div class="section">
-      <h2>重点风险摘要</h2>
+      <h2>优先关注的风险</h2>
       <ul>{risk_items_html}</ul>
       </div>
       <div class="section">
@@ -102,8 +102,8 @@ ul { line-height: 1.8; }
         <p class="tiny">结果接口：{result_api_url}</p>
       </div>
       <div class="note" style="margin-top: 16px;">
-        <h3>查看建议</h3>
-        <p class="tiny">建议先看风险统计和重点风险摘要，再结合完整审查报告下钻原文证据。</p>
+        <h3>查看提示</h3>
+        <p class="tiny">如果需要继续核对，可先从重点风险摘要进入，再回到完整审查报告查看上下文。</p>
       </div>
     </div>
   </div>
@@ -115,17 +115,17 @@ ul { line-height: 1.8; }
         page_url = escape(str(payload["page_url"]))
         body = f"""
 <div class="panel">
-  <div class="eyebrow">结果页最小实现</div>
+  <div class="eyebrow">结果查看页</div>
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
   <p>错误码：{error_code}</p>
-  <p>建议：先查看状态接口确认失败原因，再根据提示重新提交文件。</p>
+  <p>建议：先查看状态接口确认失败原因，再根据提示重新提交文件或重新触发任务。</p>
   <div class="actions">
-    <a class="buttonish" href="{page_url}">重新查看当前页面</a>
+    <a class="buttonish" href="{page_url}">再次查看当前页面</a>
   </div>
-  <p class="tiny">状态接口：{status_api_url}</p>
+  <p class="tiny">你也可以先查看状态接口，再决定是否重新提交文件：{status_api_url}</p>
 </div>
 """
     else:
@@ -134,18 +134,18 @@ ul { line-height: 1.8; }
         page_url = escape(str(payload["page_url"]))
         body = f"""
 <div class="panel">
-  <div class="eyebrow">结果页最小实现</div>
+  <div class="eyebrow">结果查看页</div>
   {status_html}
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
-  <p>建议：先查看状态接口确认当前阶段，再稍后刷新结果页或轮询结果接口。</p>
+  <p>系统仍在处理中。建议先查看状态接口确认当前阶段，再稍后刷新本页或轮询结果接口。</p>
   <div class="actions">
     <a class="buttonish" href="{page_url}">刷新当前页面</a>
     <a class="buttonish" href="{status_api_url}">查看状态接口</a>
   </div>
-  <p class="tiny">状态接口：{status_api_url}</p>
-  <p class="tiny">结果接口：{result_api_url}</p>
+  <p class="tiny">如果你在联调或排查问题，可继续查看状态接口：{status_api_url}</p>
+  <p class="tiny">结果生成后，可从这里直接查看结果接口：{result_api_url}</p>
 </div>
 """
 
