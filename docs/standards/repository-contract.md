@@ -11,8 +11,13 @@ The following files must exist:
 - `AGENTS.md`
 - `docs/architecture.md`
 - `docs/standards/coding.md`
+- `docs/standards/agent-quality-rubric.md`
 - `docs/runbooks/change-checklist.md`
+- `docs/templates/task-template.md`
+- `docs/logs/experiments.md`
+- `docs/logs/decisions.md`
 - `scripts/check-harness.sh`
+- `scripts/check-agent-quality.sh`
 - `Makefile`
 - `.github/pull_request_template.md`
 
@@ -20,6 +25,8 @@ The following files must exist:
 
 - `AGENTS.md` should remain a navigation file, not a dumping ground.
 - Every durable workflow change should update `docs/`.
+- New work should have a traceable home in a template, experiment log, or
+  decision log.
 - `make check` must stay green.
 
 ## Review Expectations

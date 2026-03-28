@@ -10,8 +10,13 @@ required_files=(
   "docs/architecture.md"
   "docs/standards/repository-contract.md"
   "docs/standards/coding.md"
+  "docs/standards/agent-quality-rubric.md"
   "docs/runbooks/change-checklist.md"
+  "docs/templates/task-template.md"
+  "docs/logs/experiments.md"
+  "docs/logs/decisions.md"
   "scripts/check-harness.sh"
+  "scripts/check-agent-quality.sh"
   "Makefile"
   ".github/pull_request_template.md"
 )
@@ -30,6 +35,11 @@ grep -q "make check" "${ROOT_DIR}/AGENTS.md" || {
 
 grep -q "scripts/check-harness.sh" "${ROOT_DIR}/Makefile" || {
   echo "Makefile must call scripts/check-harness.sh" >&2
+  exit 1
+}
+
+grep -q "scripts/check-agent-quality.sh" "${ROOT_DIR}/Makefile" || {
+  echo "Makefile must call scripts/check-agent-quality.sh" >&2
   exit 1
 }
 

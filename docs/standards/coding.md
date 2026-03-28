@@ -14,8 +14,12 @@
 - Reuse existing entrypoints before adding new ones.
 - If a new invariant matters, encode it in automation instead of relying on
   memory.
+- Write task context so another agent can resume without chat history.
+- Prefer append-only logs for experiments and decisions.
 
 ## Documentation
 
 - Update docs in the same change when behavior or workflow changes.
 - Prefer focused documents over one large instruction file.
+- When a change introduces a new decision or invalidates an old assumption,
+  update the relevant log.
