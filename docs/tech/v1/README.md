@@ -50,6 +50,7 @@
 - `implementation-prep-round-23.md`：第二十三轮实现准备，聚焦页面结果对象规范字段保留与技术接口文档收口
 - `implementation-prep-round-24.md`：第二十四轮实现准备，聚焦结果页对象定义与消费口径整主题收口
 - `implementation-prep-round-25.md`：第二十五轮实现准备，聚焦结果页辅助信息对象化整主题收口
+- `implementation-prep-round-26.md`：第二十六轮实现准备，聚焦 V1 收口判断、交付边界确认与交付准备建议
 
 ## 当前规则
 
