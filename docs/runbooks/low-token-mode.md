@@ -36,8 +36,8 @@
 
 ## 收件箱使用规则
 
-- 收件箱默认只保留待处理消息和最近仍在生效的消息
-- 已处理消息定期移入 `docs/comms/archive/`
+- 收件箱默认只保留当前唯一有效消息
+- 已处理消息立即移入 `docs/comms/archive/`
 - 需要复盘历史时，再读取归档文件
 
 ## 任务状态使用规则
@@ -55,6 +55,7 @@
 - “基于提交 `c3ee33a` 继续”
 - “只读 `docs/comms/inbox-t.md` 最新消息”
 - “先读 `docs/status/summary.md`”
+- “历史只在需要时读 `docs/comms/archive/`”
 
 不推荐每轮都写：
 
