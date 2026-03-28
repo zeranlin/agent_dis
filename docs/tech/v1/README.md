@@ -20,6 +20,12 @@
 5. `development-plan.md`
 6. `risk-and-assumption.md`
 
+## 当前新增文档
+
+在技术方案首包之后，当前已进入实现准备阶段，并补充：
+
+- `implementation-prep-round-1.md`：第一轮实现准备，聚焦上传接口、任务状态模型、文件解析链路和规则资产加载
+
 ## 当前规则
 
 - 所有文档默认使用中文
