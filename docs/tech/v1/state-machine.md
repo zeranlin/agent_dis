@@ -43,6 +43,17 @@
 
 ```mermaid
 stateDiagram-v2
+    state "已创建(created)" as created
+    state "上传校验通过(upload_validated)" as upload_validated
+    state "解析中(parsing)" as parsing
+    state "解析完成(parsed)" as parsed
+    state "待审查(review_queued)" as review_queued
+    state "章节审查中(reviewing_chapters)" as reviewing_chapters
+    state "条款审查中(reviewing_clauses)" as reviewing_clauses
+    state "结果汇总中(aggregating)" as aggregating
+    state "已完成(completed)" as completed
+    state "失败(failed)" as failed
+
     [*] --> created
     created --> upload_validated
     upload_validated --> parsing
