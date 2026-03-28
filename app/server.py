@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from urllib.parse import quote
 
-from app.result_page import render_result_page
+from app.result_page import render_missing_page, render_result_page
 from app.repository import JsonRepository
 from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService, UploadValidationError
 
@@ -68,14 +68,14 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/review-tasks/") and path.endswith("/page"):
             task_id = path.removeprefix("/review-tasks/").removesuffix("/page")
             if not task_id or "/" in task_id:
-                self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "PAGE_NOT_FOUND", "error_message": "结果页不存在。"})
+                self._write_html(HTTPStatus.NOT_FOUND, render_missing_page())
                 return
             try:
                 payload = self.server.upload_service.get_result_page_payload(task_id)
                 self._write_html(HTTPStatus.OK, render_result_page(payload))
             except ResultAccessError as exc:
                 if exc.error_code == "TASK_NOT_FOUND":
-                    self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "PAGE_NOT_FOUND", "error_message": "结果页不存在。"})
+                    self._write_html(HTTPStatus.NOT_FOUND, render_missing_page())
                 else:
                     status_code, payload = exc.to_response()
                     self._write_json(status_code, payload)

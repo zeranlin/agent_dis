@@ -136,6 +136,18 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("建议先查看状态接口确认当前阶段", html)
             self.assertIn("交付说明", html)
 
+    def test_result_page_returns_html_when_task_is_missing(self):
+        with TestServerContext() as server:
+            with self.assertRaises(urllib.error.HTTPError) as context:
+                urllib.request.urlopen(f"{server.base_url}/review-tasks/not-exists/page")
+
+            self.assertEqual(context.exception.code, 404)
+            self.assertEqual(context.exception.headers["Content-Type"], "text/html; charset=utf-8")
+            html = context.exception.read().decode("utf-8")
+            self.assertIn("结果查看页", html)
+            self.assertIn("未找到可查看的结果页", html)
+            self.assertIn("任务标识是否正确", html)
+
     def test_get_result_and_download_files_after_worker_run(self):
         with TestServerContext() as server:
             boundary = f"boundary-{uuid4().hex}"

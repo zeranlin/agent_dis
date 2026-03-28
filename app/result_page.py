@@ -159,3 +159,32 @@ ul { line-height: 1.8; }
         "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
         f"<title>{title}</title><style>{base_styles}</style></head><body><main>{body}</main></body></html>"
     )
+
+
+def render_missing_page() -> str:
+    return """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>结果页不存在</title>
+  <style>
+    body { font-family: Georgia, "Noto Serif SC", serif; margin: 0; background: #f6f1e8; color: #1e2a23; }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
+    .panel { background: #fffdf8; border: 1px solid #d8cfbd; border-radius: 16px; padding: 24px; box-shadow: 0 12px 30px rgba(49, 43, 31, 0.08); }
+    .eyebrow { color: #7f6a46; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 12px; }
+    .tiny { color: #6d655b; font-size: 14px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="panel">
+      <div class="eyebrow">结果查看页</div>
+      <h1>未找到可查看的结果页</h1>
+      <p class="tiny">请先确认任务标识是否正确，或回到上传入口重新提交文件。</p>
+      <p class="tiny">如果你在联调，可先检查任务是否已经创建并进入可查看状态。</p>
+    </div>
+  </main>
+</body>
+</html>
+"""

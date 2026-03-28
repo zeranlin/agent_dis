@@ -2,21 +2,22 @@
 
 ## 当前阶段
 
-- 结果页更细交互补全与收口判断阶段
+- 结果页线程收口待拍板阶段
 
 ## 当前唯一目标
 
-- 推进结果页更细交互补全，并判断当前结果页线程是否可收口
+- 等待总负责人判断结果页线程是否正式收口
 
 ## 当前要看什么
 
 1. `docs/status/summary.md`
 2. `docs/comms/inbox-t.md`
-3. `docs/tasks/current.md`
-4. `docs/tech/v1/` 最新相关文档
+3. `docs/comms/inbox-owner.md`
+4. `docs/tasks/current.md`
+5. `docs/tech/v1/` 最新相关文档
 
 ## 当前默认动作
 
-- 优先做最小可跑通链路
-- 不提前发散到前端扩展和复杂优化
-- 有待拍板问题写入 `docs/comms/inbox-owner.md`
+- 先等待总负责人对结果页线程收口作出判断
+- 未获新指令前，不继续扩展复杂前端能力
+- 如收到新主题，再回到最小可跑通链路推进
