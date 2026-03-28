@@ -16,17 +16,20 @@
 - 已补充任务状态层，便于下次继续衔接
 - 已细化本体文档中的核心关系定义，开始向数据模型层收敛
 - 已形成 V1 产品范围定义草案，统一收敛边界、规则分层、输出结构、角色与流程
+- 已形成 V1 默认规则包 1.0 草案，明确默认内置规则集合
 
 ## 当前结论
 
 - 该业务适合按“规则本体 + 文档结构本体 + 风险本体”三层系统推进
 - 产品目标应聚焦于风险点、规则依据、证据定位和整改建议，而不是泛化问答
 - V1 采用“报告驱动”模式，审核人员优先查看最终结论/报告，按需下钻证据
+- V1 不是规则运营平台，而是带有默认规则包的审查智能体
 
 ## 下一步建议
 
 - 细化审查报告输出结构
 - 细化风险卡片字段定义
+- 细化规则库字段模型
 - 继续把核心对象和核心关系收敛成字段级数据模型
 
 ## 阻塞或待确认
@@ -39,3 +42,4 @@
 - `docs/business/government-procurement-compliance-ontology.md`
 - `docs/business/government-procurement-review-framework.md`
 - `docs/business/v1-product-scope-draft.md`
+- `docs/business/v1-default-rule-pack-draft.md`
