@@ -38,6 +38,7 @@
 - 已建立三线程日常协作节奏 runbook
 - 已建立基于仓库文件和 git 的线程通信机制
 - 已补充文档引用路径规范，收口相对路径与 Git 地址使用原则
+- 已建立低 token 模式，增加超短摘要、角色短状态和收件箱归档机制
 - 已向技术负责人 T 发出进入实现准备第一轮的正式消息
 - 已建立 `docs/tech/v1/` 技术文档目录
 - 已形成 `P -> T` 正式交接包，统一收口当前范围、主流程、输入输出对象和验收口径
@@ -154,6 +155,12 @@
 - `docs/comms/inbox-p.md`
 - `docs/comms/inbox-t.md`
 - `docs/comms/template.md`
+- `docs/comms/archive/README.md`
+- `docs/status/summary.md`
+- `docs/tasks/owner-now.md`
+- `docs/tasks/p-now.md`
+- `docs/tasks/t-now.md`
+- `docs/runbooks/low-token-mode.md`
 - `docs/business/government-procurement-compliance-overview.md`
 - `docs/business/government-procurement-compliance-ontology.md`
 - `docs/business/government-procurement-review-framework.md`

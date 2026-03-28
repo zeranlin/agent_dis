@@ -17,6 +17,7 @@
 - `inbox-p.md`：发给产品经理 P 的问题、澄清和需求
 - `inbox-t.md`：发给技术负责人 T 的问题、安排和反馈
 - `template.md`：消息模板
+- `archive/`：已处理消息归档目录
 
 ## 使用方式
 
@@ -34,6 +35,16 @@
 - 每条消息都要写清主题、背景、问题和建议动作
 - 已经形成正式结论后，应同步写入正式文档，而不是只留在 inbox
 - `docs/tasks/current.md` 继续作为总状态板，`docs/comms/` 只负责消息往来
+- `inbox-*.md` 默认只保留待处理消息，已处理消息定期移入 `archive/`
+
+## 低 Token 建议
+
+为了减少线程读取 token 消耗，建议默认按以下顺序阅读：
+
+1. `docs/status/summary.md`
+2. `docs/tasks/owner-now.md` 或 `docs/tasks/p-now.md` 或 `docs/tasks/t-now.md`
+3. 对应 `inbox-*.md`
+4. 必要时再读 `docs/tasks/current.md`
 
 ## 当前结论
 
