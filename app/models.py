@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 
+from app.result_presenter import build_downloadable_file_payloads
+
 
 OUTWARD_STATUS_BY_INTERNAL = {
     "created": "uploaded",
@@ -240,18 +242,7 @@ class ReviewResultRecord:
             },
             "top_risks": top_risks,
             "generated_at": self.generated_at,
-            "downloadable_files": [
-                {
-                    "name": "最终结论.md",
-                    "type": "conclusion_markdown",
-                    "url": f"/api/v1/review-tasks/{self.task_id}/downloads/conclusion",
-                },
-                {
-                    "name": "审查报告.md",
-                    "type": "report_markdown",
-                    "url": f"/api/v1/review-tasks/{self.task_id}/downloads/report",
-                },
-            ],
+            "downloadable_files": build_downloadable_file_payloads(self.task_id),
         }
 
 

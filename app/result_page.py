@@ -26,6 +26,8 @@ p { line-height: 1.7; }
 .links a { display: inline-block; margin-right: 12px; margin-bottom: 8px; color: #1b4d74; text-decoration: none; font-weight: 600; }
 pre { white-space: pre-wrap; background: #f3efe6; border-radius: 14px; padding: 18px; overflow-x: auto; }
 ul { line-height: 1.8; }
+.download-list { display: grid; gap: 12px; }
+.download-item { background: #f7f2e9; border-radius: 12px; padding: 14px; }
 .split { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; margin-top: 24px; }
 .note { background: #f0e8da; border-radius: 14px; padding: 16px; line-height: 1.7; }
 .tiny { color: #6d655b; font-size: 14px; }
@@ -61,7 +63,12 @@ ul { line-height: 1.8; }
             for item in top_risks
         ) or "<li>当前未识别到明显风险。</li>"
         download_links_html = "".join(
-            f'<a href="{escape(str(item["url"]))}">{escape(str(item["name"]))}</a>'
+            "<div class=\"download-item\">"
+            f"<a class=\"buttonish\" href=\"{escape(str(item['url']))}\">{escape(str(item.get('label') or item['name']))}</a>"
+            f"<p class=\"tiny\">文件名称：{escape(str(item['name']))}</p>"
+            f"<p class=\"tiny\">文件类型：{escape(str(item.get('type') or '未知'))}</p>"
+            f"<p class=\"tiny\">{escape(str(item.get('description') or ''))}</p>"
+            "</div>"
             for item in downloadables
         )
         body = f"""
@@ -99,7 +106,7 @@ ul { line-height: 1.8; }
     <div>
       <div class="note">
         <h3>快速操作</h3>
-        <div class="links">{download_links_html}</div>
+        <div class="download-list">{download_links_html}</div>
         <div class="actions">
           <a class="buttonish" href="{page_url}">刷新当前结果页</a>
           <a class="buttonish" href="{result_api_url}">查看结果接口</a>

@@ -36,3 +36,24 @@ def build_top_risk_payload(risk: object) -> dict[str, object]:
         "risk_description": risk.risk_description,
         "review_reasoning": risk.review_reasoning,
     }
+
+
+def build_downloadable_file_payloads(task_id: str) -> list[dict[str, str]]:
+    return [
+        {
+            "name": "最终结论.md",
+            "type": "markdown",
+            "file_key": "conclusion",
+            "label": "下载最终结论",
+            "description": "适合先快速查看整体结论和风险统计。",
+            "url": f"/api/v1/review-tasks/{task_id}/downloads/conclusion",
+        },
+        {
+            "name": "审查报告.md",
+            "type": "markdown",
+            "file_key": "report",
+            "label": "下载审查报告",
+            "description": "适合继续核对风险明细、证据片段和审查说明。",
+            "url": f"/api/v1/review-tasks/{task_id}/downloads/report",
+        },
+    ]
