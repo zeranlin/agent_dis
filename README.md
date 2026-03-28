@@ -9,7 +9,7 @@ of truth:
 - `AGENTS.md` is the top-level navigation file for agents.
 - `docs/` stores durable knowledge that should stay in the repository.
 - `scripts/check-harness.sh` validates the minimum repository contract.
-- `Makefile` provides one entrypoint for local and CI checks.
+- `Makefile` provides one entrypoint for local checks.
 
 ## Quick Start
 
@@ -23,7 +23,7 @@ make check
 - `docs/architecture.md`: system boundaries and intended structure
 - `docs/standards/`: coding and repository invariants
 - `docs/runbooks/`: repeatable workflows and change checklists
-- `.github/`: pull request template and CI automation
+- `.github/`: pull request template
 
 ## Working Principle
 

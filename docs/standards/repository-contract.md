@@ -14,13 +14,13 @@ The following files must exist:
 - `docs/runbooks/change-checklist.md`
 - `scripts/check-harness.sh`
 - `Makefile`
+- `.github/pull_request_template.md`
 
 ## Repository Invariants
 
 - `AGENTS.md` should remain a navigation file, not a dumping ground.
 - Every durable workflow change should update `docs/`.
 - `make check` must stay green.
-- CI should call the same validation entrypoint used locally.
 
 ## Review Expectations
 

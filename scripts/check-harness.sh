@@ -14,7 +14,6 @@ required_files=(
   "scripts/check-harness.sh"
   "Makefile"
   ".github/pull_request_template.md"
-  ".github/workflows/check.yml"
 )
 
 for file in "${required_files[@]}"; do
