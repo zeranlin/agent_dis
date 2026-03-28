@@ -7,7 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-CHAPTER_PATTERN = re.compile(r"^(第[一二三四五六七八九十百]+章.*|\d+[、.].*)$")
+CHAPTER_PATTERN = re.compile(r"^(第[一二三四五六七八九十百]+章.*|[一二三四五六七八九十]+、.*|\d+[、.]\D.*)$")
 CLAUSE_PATTERN = re.compile(r"^(\d+(?:\.\d+){0,3}[、.]?.*|第[一二三四五六七八九十]+条.*)$")
 PAGE_NUMBER_PATTERN = re.compile(r"^(?:第?\d+页|\d+/\d+|\d+)$")
 W_NAMESPACE = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
@@ -66,6 +66,12 @@ def parse_document(path: Path) -> ParsedDocument:
 
     page_count = estimate_page_count(content, suffix, cleaned_text)
     blocks = segment_document(cleaned_text, page_count)
+    if not any(block.block_type != "section" for block in blocks):
+        raise ParseFailure(
+            "DOCUMENT_NO_REVIEWABLE_TEXT",
+            "文件无可审查正文",
+            "文件仅识别到章节标题，未形成可审查片段。",
+        )
     return ParsedDocument(raw_text=cleaned_text, page_count=page_count, blocks=blocks)
 
 
@@ -189,17 +195,17 @@ def segment_document(text: str, page_count: int) -> list[ParsedBlock]:
     emit_section("默认章节")
 
     for line in lines:
-        if CHAPTER_PATTERN.match(line):
-            emit_paragraph()
-            emit_clause()
-            emit_section(line)
-            continue
-
         if CLAUSE_PATTERN.match(line):
             emit_paragraph()
             emit_clause()
             current_clause_anchor = line
             current_clause_lines = [line]
+            continue
+
+        if CHAPTER_PATTERN.match(line):
+            emit_paragraph()
+            emit_clause()
+            emit_section(line)
             continue
 
         if current_clause_lines:

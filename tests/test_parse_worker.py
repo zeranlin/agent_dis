@@ -113,6 +113,42 @@ class ParseWorkerTestCase(unittest.TestCase):
             assert document is not None
             self.assertIn("供应商须具备独立承担民事责任的能力", document.raw_text)
 
+    def test_parse_worker_keeps_multilevel_numbered_lines_as_clauses(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 资格要求",
+                            "1.1 供应商资格",
+                            "供应商须具备独立承担民事责任的能力。",
+                            "1.2 信用要求",
+                            "供应商不得存在严重违法失信记录。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            assert task is not None
+            self.assertEqual(task.internal_status, "review_queued")
+
+            blocks = repository.list_blocks_by_document(task.document_id)
+            section_titles = [block.title for block in blocks if block.block_type == "section"]
+            clause_titles = [block.title for block in blocks if block.block_type == "clause"]
+
+            self.assertIn("第一章 资格要求", section_titles)
+            self.assertNotIn("1.1 供应商资格", section_titles)
+            self.assertNotIn("1.2 信用要求", section_titles)
+            self.assertIn("1.1 供应商资格", clause_titles)
+            self.assertIn("1.2 信用要求", clause_titles)
+
     def test_parse_worker_extracts_text_from_doc(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             repository = JsonRepository(Path(runtime_dir))
@@ -160,6 +196,33 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertEqual(task.internal_status, "failed")
             self.assertEqual(task.error_code, "DOCUMENT_NO_REVIEWABLE_TEXT")
             self.assertIn("文件无可审查正文", task.status_message)
+
+    def test_parse_worker_marks_task_failed_when_only_section_titles_exist(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 总则和说明信息",
+                            "第二章 评分办法和审查说明",
+                            "第三章 合同条款和履约安排",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            assert task is not None
+            self.assertEqual(task.internal_status, "failed")
+            self.assertEqual(task.error_code, "DOCUMENT_NO_REVIEWABLE_TEXT")
+            self.assertIn("文件无可审查正文", task.status_message)
+            self.assertEqual(list((Path(runtime_dir) / "queues" / "review").glob("*.json")), [])
 
     def test_asset_loader_loads_rule_pack_and_prompt(self):
         loader = ReviewAssetLoader(Path(__file__).resolve().parent.parent)
