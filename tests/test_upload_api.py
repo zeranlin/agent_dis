@@ -69,6 +69,33 @@ class TestServerContext:
 
 
 class UploadApiTestCase(unittest.TestCase):
+    def test_result_page_payload_keeps_canonical_result_fields(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            service = UploadService(repository)
+            upload_response = service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=(
+                        "第一章 资格要求\n"
+                        "1.1 供应商资格\n"
+                        "供应商须本地注册并在本地办公。\n"
+                        "第二章 评分办法\n"
+                        "2.1 评分标准\n"
+                        "采用综合评价并可酌情打分。\n"
+                    ).encode("utf-8"),
+                )
+            )
+
+            WorkerRunner(repository, Path(__file__).resolve().parent.parent).run_until_idle()
+
+            completed_payload = service.get_result_page_payload(upload_response["task_id"])
+
+            self.assertEqual(completed_payload["page_state"], "completed")
+            self.assertEqual(completed_payload["summary_title"], completed_payload["title"])
+            self.assertEqual(completed_payload["overall_conclusion"], completed_payload["message"])
+            self.assertIn("downloadable_files", completed_payload)
+
     def test_result_page_renders_completed_task(self):
         with TestServerContext() as server:
             boundary = f"boundary-{uuid4().hex}"
@@ -114,6 +141,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("下载最终结论", html)
             self.assertIn("下载审查报告", html)
             self.assertIn("文件类型：markdown", html)
+            self.assertIn("审查已完成", html)
             self.assertIn("刷新当前结果页", html)
             self.assertIn("/review-tasks/", html)
             self.assertIn("/api/v1/review-tasks/", html)
@@ -197,6 +225,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("page_url", result_payload)
             self.assertIn("status_api_url", result_payload)
             self.assertIn("result_api_url", result_payload)
+            self.assertEqual(result_payload["summary_title"], "审查已完成")
             self.assertIn("chapter_title", result_payload["top_risks"][0])
             self.assertIn("clause_type", result_payload["top_risks"][0])
             self.assertIn("review_reasoning", result_payload["top_risks"][0])

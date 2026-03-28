@@ -135,16 +135,41 @@
   "file_name": "招标文件.pdf",
   "summary_title": "审查已完成",
   "overall_conclusion": "本文件存在明显风险，建议重点关注资格条件和评分规则。",
+  "conclusion_markdown": "# 最终结论\n\n## 结论摘要\n\n- 总体结论：本文件存在明显风险。\n",
   "report_markdown": "# 审查报告\n\n## 总体结论\n\n本文件存在明显风险。\n",
+  "risk_count_summary": {
+    "high": 1,
+    "medium": 0,
+    "low": 1
+  },
+  "top_risks": [
+    {
+      "risk_id": "risk_001",
+      "risk_title": "供应商本地注册限制",
+      "risk_level": "高",
+      "location_label": "第一章 资格要求 / 1.1 供应商资格",
+      "chapter_title": "第一章 资格要求",
+      "clause_type": "条款片段",
+      "risk_description": "第一章 资格要求的条款片段中出现“本地注册”，命中地域限制规则。",
+      "review_reasoning": "当前最小执行骨架在“第一章 资格要求 / 1.1 供应商资格”识别到关键词“本地注册”，属于第一章 资格要求的条款片段。"
+    }
+  ],
+  "generated_at": "2026-03-29T12:00:00+08:00",
   "downloadable_files": [
     {
       "name": "最终结论.md",
-      "type": "conclusion_markdown",
+      "type": "markdown",
+      "file_key": "conclusion",
+      "label": "下载最终结论",
+      "description": "适合先快速查看整体结论和风险统计。",
       "url": "/api/v1/review-tasks/task_001/downloads/conclusion"
     },
     {
       "name": "审查报告.md",
-      "type": "report_markdown",
+      "type": "markdown",
+      "file_key": "report",
+      "label": "下载审查报告",
+      "description": "适合继续核对风险明细、证据片段和审查说明。",
       "url": "/api/v1/review-tasks/task_001/downloads/report"
     }
   ]
@@ -159,14 +184,14 @@
 - `top_risks`
 - `risk_items`
 
-当前最小代码实现已补充：
+当前最小代码实现已补充并稳定输出：
 
 - `conclusion_markdown`
 - `risk_count_summary`
 - `top_risks`
 - `generated_at`
 
-这些字段应作为可选扩展，不应阻塞 V1 首版交付。
+这些字段当前已进入结果页和下载链路消费范围，可视为稳定扩展字段。
 
 ## 6. 下载结果文件
 

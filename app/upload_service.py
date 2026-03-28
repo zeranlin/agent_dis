@@ -158,6 +158,8 @@ class UploadService:
             return {
                 "page_state": "completed",
                 "status_label": "结果已生成",
+                "summary_title": str(result_payload["summary_title"]),
+                "overall_conclusion": str(result_payload["overall_conclusion"]),
                 "title": str(result_payload["summary_title"]),
                 "file_name": task.file_name,
                 "message": str(result_payload["overall_conclusion"]),
@@ -176,6 +178,8 @@ class UploadService:
             return {
                 "page_state": "failed",
                 "status_label": "任务失败",
+                "summary_title": "审查未完成",
+                "overall_conclusion": task.status_message,
                 "title": "审查未完成",
                 "file_name": task.file_name,
                 "message": task.status_message,
@@ -187,6 +191,8 @@ class UploadService:
         return {
             "page_state": "reviewing",
             "status_label": "审核中",
+            "summary_title": "审查进行中",
+            "overall_conclusion": task.status_message,
             "title": "审查进行中",
             "file_name": task.file_name,
             "message": task.status_message,

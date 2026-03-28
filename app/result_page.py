@@ -5,9 +5,9 @@ from html import escape
 
 def render_result_page(payload: dict[str, object]) -> str:
     page_state = str(payload["page_state"])
-    title = escape(str(payload["title"]))
+    title = escape(str(payload.get("summary_title", payload["title"])))
     file_name = escape(str(payload["file_name"]))
-    message = escape(str(payload["message"]))
+    message = escape(str(payload.get("overall_conclusion", payload["message"])))
 
     base_styles = """
 body { font-family: Georgia, "Noto Serif SC", serif; margin: 0; background: #f6f1e8; color: #1e2a23; }
