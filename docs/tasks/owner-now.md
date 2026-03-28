@@ -2,18 +2,18 @@
 
 ## 当前阶段
 
-- 技术推进轮
+- 阶段收口轮
 
 ## 当前唯一目标
 
-- 审阅 T 的结果页更细交互补全与收口判断产出，并决定该页面线程是否收口
+- 维护结果页线程收口结论，并决定下一主题
 
 ## 当前要看什么
 
 1. `docs/status/summary.md`
 2. `docs/comms/inbox-owner.md`
 3. `docs/tasks/current.md`
-4. `docs/tech/v1/` 最新新增文档
+4. 需要时再看 `docs/tasks/archive/`
 
 ## 当前默认动作
 

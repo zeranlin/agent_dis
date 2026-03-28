@@ -34,7 +34,8 @@
 
 为了支持下次重新打开 Codex 仍能快速回到上下文，仓库内增加任务状态层，统一使用以下文件：
 
-- `docs/tasks/current.md`：当前正在推进的任务
+- `docs/tasks/current.md`：当前正在推进的任务总板
+- `docs/tasks/archive/`：历史任务状态归档
 - `docs/tasks/backlog.md`：待办任务池
 - `docs/tasks/done.md`：已完成任务记录
 - `docs/tasks/template.md`：任务条目模板
@@ -108,6 +109,7 @@
 - 架构和边界沉淀到 `docs/tech/v1/`
 - 长期决策沉淀到 `docs/logs/decisions.md`
 - 当前推进状态沉淀到 `docs/tasks/current.md`
+- 详细推进历史沉淀到 `docs/tasks/archive/`
 
 ## 计划中的扩展顺序
 

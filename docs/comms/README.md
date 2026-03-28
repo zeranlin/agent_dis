@@ -35,9 +35,10 @@
 - 正式问题优先写入 inbox，不只留在聊天里
 - 每条消息都要写清主题、背景、问题和建议动作
 - 已经形成正式结论后，应同步写入正式文档，而不是只留在 inbox
-- `docs/tasks/current.md` 继续作为总状态板，`docs/comms/` 只负责消息往来
+- `docs/tasks/current.md` 继续作为当前状态总板，`docs/comms/` 只负责消息往来
 - `inbox-*.md` 默认只保留当前唯一有效消息
 - 历史消息统一进入 `archive/`，不继续堆在 inbox
+- 详细任务历史统一进入 `docs/tasks/archive/`，不继续堆在 `current.md`
 
 ## 低 Token 建议
 
