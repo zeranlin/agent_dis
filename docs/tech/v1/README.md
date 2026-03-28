@@ -26,7 +26,7 @@
 
 - `implementation-prep-round-1.md`：第一轮实现准备，聚焦上传接口、任务状态模型、文件解析链路和规则资产加载
 - `architecture-layering.md`：V1 技术架构与分层方案，统一说明系统分层、模块边界、关键链路、状态流转和主要风险
-- `implementation-prep-round-2.md`：第二轮实现准备，聚焦解析 worker、规则资产加载器、状态推进和最小测试
+- `implementation-prep-round-2.md`：第二轮实现准备，聚焦解析 worker、规则资产加载器、状态推进和最小测试，并明确当前解析仅为占位实现
 
 ## 当前规则
 

@@ -250,14 +250,14 @@ graph LR
 assets/
   review/
     rule-packs/
-      default-rule-pack.v1.yaml
+      default-rule-pack.v1.json
     prompts/
       review-task-instruction.v1.md
 ```
 
 ### 8.3 规则包加载约定
 
-- 输入：`YAML` 文件
+- 输入：`JSON` 文件
 - 加载后输出：`review_rule[]`
 - 校验点：
   - 必须存在 `rule_code`

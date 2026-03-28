@@ -28,7 +28,7 @@ class PromptAsset:
 class ReviewAssetLoader:
     def __init__(self, root_dir: Path):
         self.root_dir = root_dir
-        self.rule_pack_path = self.root_dir / "assets" / "review" / "rule-packs" / "default-rule-pack.v1.yaml"
+        self.rule_pack_path = self.root_dir / "assets" / "review" / "rule-packs" / "default-rule-pack.v1.json"
         self.prompt_path = self.root_dir / "assets" / "review" / "prompts" / "review-task-instruction.v1.md"
 
     def load_rule_pack(self) -> list[dict[str, object]]:

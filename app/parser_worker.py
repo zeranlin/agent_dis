@@ -86,6 +86,7 @@ class ParseWorker:
 
     @staticmethod
     def _extract_text(path: Path) -> str:
+        # 当前仅提供最小文本解码占位实现，还不等同于真实 PDF/Word 提取能力。
         content = path.read_bytes()
         for encoding in ("utf-8", "gb18030"):
             try:
