@@ -1,10 +1,10 @@
 # AGENTS.md
 
-This file is the entrypoint for coding agents working in this repository.
+这个文件是智能体在本仓库内工作的统一入口。
 
-## Start Here
+## 从这里开始
 
-Before making changes, read these files in order:
+开始修改前，请按顺序阅读以下文件：
 
 1. `README.md`
 2. `docs/architecture.md`
@@ -12,38 +12,36 @@ Before making changes, read these files in order:
 4. `docs/standards/agent-quality-rubric.md`
 5. `docs/runbooks/change-checklist.md`
 
-Then run:
+然后执行：
 
 ```bash
 make check
 ```
 
-## Operating Rules
+## 工作规则
 
-- Treat this repository as the system of record.
-- Put durable decisions in `docs/`, not only in chats or PR comments.
-- Keep changes small and easy to review.
-- If you introduce a new workflow or invariant, document it and automate it.
-- When documentation and code drift, fix the drift in the same change when
-  possible.
+- 把这个仓库视为事实记录系统。
+- 长期有效的决策要写进 `docs/`，不要只留在聊天或 PR 评论里。
+- 保持改动尽量小，便于审阅。
+- 如果引入新的工作流或新约束，要同时补文档和自动化检查。
+- 当文档与代码发生漂移时，尽量在同一次变更里修正。
 
-## Where Knowledge Lives
+## 知识存放位置
 
-- Architecture and boundaries: `docs/architecture.md`
-- Repository invariants: `docs/standards/repository-contract.md`
-- Coding standards: `docs/standards/coding.md`
-- Agent quality rubric: `docs/standards/agent-quality-rubric.md`
-- Task template: `docs/templates/task-template.md`
-- Experiment log: `docs/logs/experiments.md`
-- Decision log: `docs/logs/decisions.md`
-- Change workflow: `docs/runbooks/change-checklist.md`
+- 架构与边界：`docs/architecture.md`
+- 仓库约束：`docs/standards/repository-contract.md`
+- 编码规范：`docs/standards/coding.md`
+- 智能体质量评分规则：`docs/standards/agent-quality-rubric.md`
+- 任务模板：`docs/templates/task-template.md`
+- 实验记录：`docs/logs/experiments.md`
+- 决策记录：`docs/logs/decisions.md`
+- 变更工作流：`docs/runbooks/change-checklist.md`
 
-## Definition Of Done
+## 完成定义
 
-A task is not done until:
+满足以下条件后，任务才算完成：
 
-1. The relevant docs are still accurate.
-2. `make check` passes.
-3. The validation steps are included in the change notes or PR.
-4. New work that changes behavior, direction, or learning leaves an explicit
-   trail in the appropriate template or log.
+1. 相关文档仍然准确。
+2. `make check` 通过。
+3. 验证步骤已经写入变更说明或 PR。
+4. 如果新工作改变了行为、方向或认知，必须在对应模板或日志中留下明确记录。

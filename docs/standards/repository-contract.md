@@ -1,11 +1,10 @@
-# Repository Contract
+# 仓库契约
 
-This file defines repository-level invariants that agents and humans should
-preserve.
+本文定义了人和智能体都应共同遵守的仓库级约束。
 
-## Required Files
+## 必需文件
 
-The following files must exist:
+以下文件必须存在：
 
 - `README.md`
 - `AGENTS.md`
@@ -21,19 +20,19 @@ The following files must exist:
 - `Makefile`
 - `.github/pull_request_template.md`
 
-## Repository Invariants
+## 仓库不变量
 
-- `AGENTS.md` should remain a navigation file, not a dumping ground.
-- Every durable workflow change should update `docs/`.
-- New work should have a traceable home in a template, experiment log, or
-  decision log.
-- `make check` must stay green.
+- `AGENTS.md` 必须保持为导航文件，而不是信息堆积区。
+- 任何长期有效的工作流变化都应同步更新 `docs/`。
+- 新工作必须能在模板、实验日志或决策日志中找到可追溯落点。
+- `make check` 必须保持通过。
+- 仓库中的 Markdown 文档默认使用中文编写。
 
-## Review Expectations
+## 审阅要求
 
-Changes should answer these questions:
+每次变更都应回答以下问题：
 
-1. What changed?
-2. Why did it change?
-3. How was it validated?
-4. What docs were updated, or why were no doc changes needed?
+1. 改了什么？
+2. 为什么要改？
+3. 如何验证？
+4. 更新了哪些文档，或者为什么不需要更新文档？

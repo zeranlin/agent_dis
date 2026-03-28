@@ -1,43 +1,37 @@
-# Architecture
+# 架构说明
 
-## Purpose
+## 目标
 
-`agent_dis` is currently a delivery harness for building an agent-first project
-without letting the repository dissolve into undocumented prompts, one-off
-scripts, or untraceable changes.
+`agent_dis` 当前首先是一套智能体优先项目的交付脚手架，目标是在持续开发过程中，避免仓库逐渐演变成“只有 prompt、一次性脚本和不可追溯改动”的状态。
 
-The immediate goal is not maximum feature volume. The goal is to make future
-feature work legible:
+现阶段的目标不是一味追求功能堆积，而是让未来的功能开发保持清晰可读：
 
-- humans can understand what the project is trying to do
-- agents can discover where to place new work
-- reviewers can validate output against explicit standards
+- 人能够理解项目到底要做什么
+- 智能体能够判断新工作应该放在哪里
+- 审阅者能够依据明确标准验证产出
 
-## Product Assumption
+## 当前产品假设
 
-Until application code exists, the repository's working assumption is:
+在还没有业务代码之前，本仓库当前采用如下工作假设：
 
-`agent_dis` will be developed primarily through human-guided agent execution,
-with the repository acting as the system of record for scope, quality gates, and
-architectural decisions.
+`agent_dis` 将主要通过“人来掌舵、智能体来执行”的方式推进，仓库负责沉淀范围边界、质量门槛和架构决策。
 
-If the product mission changes, update this section first before expanding the
-codebase.
+如果产品目标发生变化，应先更新本节，再扩展代码仓库。
 
-## Current System Layers
+## 当前系统分层
 
-The repository currently has four layers.
+当前仓库分为四层。
 
-### 1. Navigation Layer
+### 1. 导航层
 
-Entry files that tell humans and agents where to start:
+用于告诉人和智能体“应该从哪里开始”的入口文件：
 
 - `README.md`
 - `AGENTS.md`
 
-### 2. Knowledge Layer
+### 2. 知识层
 
-Durable documents that preserve intent and constraints:
+用于长期保存意图、约束和共识的文档：
 
 - `docs/architecture.md`
 - `docs/standards/`
@@ -45,53 +39,51 @@ Durable documents that preserve intent and constraints:
 - `docs/templates/`
 - `docs/logs/`
 
-### 3. Control Layer
+### 3. 控制层
 
-Executable checks that keep the repository contract enforceable:
+用于把仓库约束变成可执行检查的入口：
 
 - `Makefile`
 - `scripts/check-harness.sh`
 - `scripts/check-agent-quality.sh`
 
-### 4. Delivery Layer
+### 4. 交付层
 
-The future home of product code, services, prompts, evaluations, and
-integration-specific implementation. This layer should not grow until ownership
-and validation are documented here.
+未来这里会承载产品代码、服务、提示词、评估逻辑以及具体集成实现。在所有权和验证方式没有先写进本文档之前，这一层不应随意扩张。
 
-## Planned Expansion Path
+## 计划中的扩展顺序
 
-When product code is added, expand the repository in this order:
+当开始引入产品代码时，仓库应按以下顺序扩展：
 
-1. Define the subsystem and owner in this document.
-2. Define its validation method.
-3. Add or update the task template fields needed for that subsystem.
-4. Add implementation files.
+1. 先在本文档中定义子系统及其负责范围。
+2. 明确该子系统的验证方式。
+3. 补充或调整该子系统所需的任务模板字段。
+4. 最后再增加实现文件。
 
-This ordering is intentional: design the harness before increasing throughput.
+这样排序是刻意的：先设计脚手架，再提升吞吐。
 
-## Structural Rules
+## 结构规则
 
-- Root files should stay few and high signal.
-- Long-lived knowledge belongs under `docs/`.
-- Repeatable checks belong in `scripts/`.
-- Templates should describe new work before work begins.
-- Logs should preserve what was learned after work finishes.
-- Every new top-level directory should have an explicit reason in this file.
+- 根目录文件应尽量少而高信号。
+- 长期知识应放在 `docs/` 下。
+- 可重复执行的检查应放在 `scripts/` 下。
+- 模板要在工作开始前定义好任务形状。
+- 日志要在工作完成后保留学习结果。
+- 每个新增顶层目录，都应在本文档中说明存在理由。
 
-## Required Traceability
+## 必要的可追溯性
 
-Every material change should leave an artifact in at least one of these places:
+每个重要变更，至少应在以下一个位置留下记录：
 
-- `docs/templates/task-template.md` for the shape of a new task
-- `docs/logs/experiments.md` for tested hypotheses and outcomes
-- `docs/logs/decisions.md` for durable choices with consequences
+- `docs/templates/task-template.md`：记录新任务的结构
+- `docs/logs/experiments.md`：记录已验证的假设与结果
+- `docs/logs/decisions.md`：记录具有长期影响的决策及后果
 
-## Change Policy
+## 变更策略
 
-If you add a new subsystem, update this file with:
+如果你新增了一个子系统，必须在本文件中补充以下内容：
 
-1. What the subsystem owns
-2. What it depends on
-3. How it is validated
-4. Which log or template should capture its decisions and experiments
+1. 这个子系统负责什么
+2. 它依赖什么
+3. 它如何被验证
+4. 它的决策和实验应当沉淀到哪个日志或模板里

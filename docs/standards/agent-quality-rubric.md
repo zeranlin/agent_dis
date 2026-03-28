@@ -1,37 +1,33 @@
-# Agent Quality Rubric
+# 智能体产出质量规则
 
-This rubric defines the minimum quality bar for agent-authored output in this
-repository.
+这份规则定义了本仓库中智能体产出的最低质量门槛。
 
-## Scoring Model
+## 评分维度
 
-Each change should be reviewable against five dimensions:
+每次变更都应从以下五个维度进行审视：
 
-1. Intent clarity: the task and expected outcome are explicit
-2. Traceability: decisions and experiments are captured in the repository
-3. Validation: checks or manual verification are described
-4. Repository fit: changes follow the documented structure and entrypoints
-5. Maintainability: another human or agent can continue the work
+1. 意图清晰：任务和预期结果是否明确
+2. 可追溯性：决策和实验是否沉淀在仓库中
+3. 可验证性：是否描述了检查方式或人工验证
+4. 仓库契合度：是否遵循既有结构和入口
+5. 可维护性：是否便于其他人或智能体继续接手
 
-The goal of the script is not to grade semantics perfectly. It enforces that the
-repository contains the artifacts needed for this rubric to be applied
-consistently.
+脚本的目标不是完美判断语义质量，而是确保仓库具备应用这套规则所需的最小文档与结构基础。
 
-## Minimum Contract
+## 最小契约
 
-The following artifacts must exist and contain the documented sections:
+以下文件必须存在，并包含约定的章节：
 
 - `docs/templates/task-template.md`
 - `docs/logs/experiments.md`
 - `docs/logs/decisions.md`
 
-## Review Questions
+## 审阅问题
 
-Use these questions during review:
+审阅时请至少回答以下问题：
 
-1. Can someone understand the task without rereading the chat?
-2. Is the expected validation explicit?
-3. Were meaningful learnings recorded as experiments or decisions?
-4. Did the change extend existing repository pathways instead of inventing new
-   hidden ones?
-5. Could another agent resume work safely from the repository alone?
+1. 不重新翻聊天记录，别人能否理解这项任务？
+2. 预期的验证方式是否明确？
+3. 关键学习是否被记录为实验或决策？
+4. 这次改动是否扩展了现有路径，而不是发明新的隐性流程？
+5. 另一个智能体能否只依赖仓库内容安全接手？

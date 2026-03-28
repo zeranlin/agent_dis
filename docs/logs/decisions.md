@@ -1,13 +1,13 @@
-# Decision Log
+# 决策日志
 
-Record durable project decisions here.
+这里用于记录对项目有长期影响的决策。
 
-## Entry Template
+## 记录模板
 
-### YYYY-MM-DD - Decision Name
+### YYYY-MM-DD - 决策名称
 
-- Status:
-- Context:
-- Decision:
-- Consequences:
-- Related Artifacts:
+- 状态：
+- 背景：
+- 决策：
+- 影响：
+- 相关资料：

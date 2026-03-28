@@ -1,25 +1,24 @@
-# Coding Standards
+# 编码规范
 
-## General
+## 通用原则
 
-- Prefer readable, boring defaults over cleverness.
-- Keep modules small and ownership boundaries explicit.
-- Add comments only when they preserve intent that is hard to infer from code.
-- Avoid hidden side effects in scripts and automation.
+- 优先选择可读、朴素的默认方案，而不是炫技式实现。
+- 保持模块足够小，边界和归属清晰。
+- 只有在代码本身难以表达意图时才添加注释。
+- 避免在脚本和自动化中引入隐蔽副作用。
 
-## Agent-Focused Guidance
+## 面向智能体的约束
 
-- Name files and commands so they are easy to discover.
-- Keep setup and validation commands short and predictable.
-- Reuse existing entrypoints before adding new ones.
-- If a new invariant matters, encode it in automation instead of relying on
-  memory.
-- Write task context so another agent can resume without chat history.
-- Prefer append-only logs for experiments and decisions.
+- 文件名和命令应当便于发现和检索。
+- 初始化与验证命令应尽量短、可预测。
+- 在增加新入口之前，优先复用现有入口。
+- 如果某个新约束很重要，应把它编码进自动化，而不是依赖记忆。
+- 任务上下文应写到足以让另一个智能体脱离聊天记录继续工作。
+- 实验和决策记录优先采用追加式日志。
 
-## Documentation
+## 文档要求
 
-- Update docs in the same change when behavior or workflow changes.
-- Prefer focused documents over one large instruction file.
-- When a change introduces a new decision or invalidates an old assumption,
-  update the relevant log.
+- 当行为或工作流发生变化时，要在同一次变更里更新文档。
+- 优先使用聚焦的小文档，而不是一个大而全的说明文件。
+- 当一项改动引入新决策或推翻旧假设时，要更新对应日志。
+- 本仓库中的 Markdown 文档内容默认使用中文。

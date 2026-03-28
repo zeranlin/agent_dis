@@ -28,17 +28,38 @@ for file in "${required_files[@]}"; do
   fi
 done
 
-check_file_contains "docs/templates/task-template.md" "## Summary"
-check_file_contains "docs/templates/task-template.md" "## Validation"
-check_file_contains "docs/templates/task-template.md" "## Notes For The Next Agent"
-check_file_contains "docs/logs/experiments.md" "## Entry Template"
-check_file_contains "docs/logs/experiments.md" "Hypothesis:"
-check_file_contains "docs/logs/experiments.md" "Result:"
-check_file_contains "docs/logs/decisions.md" "## Entry Template"
-check_file_contains "docs/logs/decisions.md" "Decision:"
-check_file_contains "docs/logs/decisions.md" "Consequences:"
-check_file_contains "docs/standards/agent-quality-rubric.md" "## Scoring Model"
-check_file_contains "docs/standards/agent-quality-rubric.md" "## Minimum Contract"
-check_file_contains "docs/standards/agent-quality-rubric.md" "## Review Questions"
+check_file_contains "docs/templates/task-template.md" "## 摘要"
+check_file_contains "docs/templates/task-template.md" "## 验证"
+check_file_contains "docs/templates/task-template.md" "## 给下一个智能体的说明"
+check_file_contains "docs/logs/experiments.md" "## 记录模板"
+check_file_contains "docs/logs/experiments.md" "假设："
+check_file_contains "docs/logs/experiments.md" "结果："
+check_file_contains "docs/logs/decisions.md" "## 记录模板"
+check_file_contains "docs/logs/decisions.md" "决策："
+check_file_contains "docs/logs/decisions.md" "影响："
+check_file_contains "docs/standards/agent-quality-rubric.md" "## 评分维度"
+check_file_contains "docs/standards/agent-quality-rubric.md" "## 最小契约"
+check_file_contains "docs/standards/agent-quality-rubric.md" "## 审阅问题"
+
+md_files=(
+  "README.md"
+  "AGENTS.md"
+  ".github/pull_request_template.md"
+  "docs/architecture.md"
+  "docs/logs/experiments.md"
+  "docs/logs/decisions.md"
+  "docs/runbooks/change-checklist.md"
+  "docs/standards/agent-quality-rubric.md"
+  "docs/standards/coding.md"
+  "docs/standards/repository-contract.md"
+  "docs/templates/task-template.md"
+)
+
+for file in "${md_files[@]}"; do
+  if ! grep -q '[一-龥]' "${ROOT_DIR}/${file}"; then
+    echo "Markdown file must contain Chinese content: ${file}" >&2
+    exit 1
+  fi
+done
 
 echo "Agent quality checks passed."

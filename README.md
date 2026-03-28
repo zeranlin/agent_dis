@@ -1,50 +1,47 @@
 # agent_dis
 
-An agent-first repository scaffold inspired by OpenAI's "harness engineering"
-approach.
+这是一个受 OpenAI“harness engineering”理念启发的智能体优先仓库脚手架。
 
-This repository is set up so humans and coding agents can share the same source
-of truth while building `agent_dis` in an incremental, agent-first way:
+这个仓库的目标，是让人在以智能体为主的增量开发过程中，始终共享同一份事实来源：
 
-- `AGENTS.md` is the top-level navigation file for agents.
-- `docs/` stores durable knowledge that should stay in the repository.
-- `docs/templates/` defines task intake structure.
-- `docs/logs/` captures experiments and decisions over time.
-- `scripts/check-harness.sh` validates the minimum repository contract.
-- `scripts/check-agent-quality.sh` validates the agent-quality rubric contract.
-- `Makefile` provides one entrypoint for local checks.
+- `AGENTS.md` 是智能体的顶层导航文件。
+- `docs/` 用来存放应当长期保留在仓库中的知识。
+- `docs/templates/` 定义任务接入模板。
+- `docs/logs/` 记录实验和决策过程。
+- `scripts/check-harness.sh` 用来校验仓库最小契约。
+- `scripts/check-agent-quality.sh` 用来校验智能体产出质量规则。
+- `Makefile` 提供统一的本地检查入口。
 
-## Quick Start
+## 快速开始
 
 ```bash
 make check
 ```
 
-## Repository Shape
+## 仓库结构
 
-- `AGENTS.md`: agent navigation and working contract
-- `docs/architecture.md`: system boundaries and intended structure
-- `docs/templates/`: templates for new work items
-- `docs/logs/`: experiment and decision history
-- `docs/standards/`: coding and repository invariants
-- `docs/runbooks/`: repeatable workflows and change checklists
-- `.github/`: pull request template
+- `AGENTS.md`：智能体导航与工作约定
+- `docs/architecture.md`：系统边界与预期结构
+- `docs/templates/`：新任务模板
+- `docs/logs/`：实验与决策记录
+- `docs/standards/`：编码与仓库约束
+- `docs/runbooks/`：可复用的工作流与变更清单
+- `.github/`：Pull Request 模板
 
-## Working Principle
+## 工作原则
 
-The goal is not to stuff every instruction into one file. Instead:
+我们的目标不是把所有说明都塞进一个文件，而是：
 
-1. Keep the repository as the source of truth.
-2. Keep `AGENTS.md` short and navigational.
-3. Encode important rules into scripts and CI where possible.
-4. Prefer small, reviewable changes with explicit validation steps.
+1. 让仓库成为事实来源。
+2. 让 `AGENTS.md` 保持简短、以导航为主。
+3. 尽可能把重要规则编码进脚本和检查流程。
+4. 优先采用小而可审阅、验证步骤明确的变更。
 
-## Current Focus
+## 当前重点
 
-The current phase of `agent_dis` is to establish a durable operating harness for
-agent-driven delivery:
+`agent_dis` 当前阶段的重点，是先建立一套可持续运转的智能体交付脚手架：
 
-- clarify the product boundary before implementation expands
-- standardize task intake and validation
-- keep experiment outcomes and architecture decisions inside the repository
-- make agent output quality visible and machine-checkable
+- 在实现扩张之前先澄清产品边界
+- 标准化任务接入与验证方式
+- 把实验结果和架构决策沉淀在仓库内
+- 让智能体产出质量可见、可检查

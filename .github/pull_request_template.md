@@ -1,17 +1,17 @@
-## Summary
+## 摘要
 
-- What changed?
+- 这次改了什么？
 
-## Why
+## 原因
 
-- Why is this change needed?
+- 为什么需要这次改动？
 
-## Validation
+## 验证
 
 - [ ] `make check`
-- [ ] Additional manual validation noted below
+- [ ] 已在下方补充额外的人工验证说明
 
-## Docs
+## 文档
 
-- [ ] Docs updated
-- [ ] No doc changes needed, and why:
+- [ ] 文档已更新
+- [ ] 不需要修改文档，原因如下：

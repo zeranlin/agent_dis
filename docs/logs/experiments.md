@@ -1,13 +1,13 @@
-# Experiment Log
+# 实验日志
 
-Record hypotheses, tests, and outcomes here.
+这里用于记录假设、实验过程和结果。
 
-## Entry Template
+## 记录模板
 
-### YYYY-MM-DD - Experiment Name
+### YYYY-MM-DD - 实验名称
 
-- Hypothesis:
-- Change:
-- Validation:
-- Result:
-- Follow-up:
+- 假设：
+- 改动：
+- 验证：
+- 结果：
+- 后续动作：

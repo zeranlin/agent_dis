@@ -1,33 +1,33 @@
-# Task Template
+# 任务模板
 
-Use this template when starting a new material task.
+开始新的重要任务时，使用这份模板。
 
-## Summary
+## 摘要
 
-- What are we trying to change?
+- 我们要改什么？
 
-## Goal
+## 目标
 
-- What user or system outcome should improve?
+- 希望改善什么用户结果或系统结果？
 
-## Scope
+## 范围
 
-- What is in scope?
-- What is out of scope?
+- 哪些内容在范围内？
+- 哪些内容不在范围内？
 
-## Constraints
+## 约束
 
-- What rules, boundaries, or risks must be respected?
+- 需要遵守哪些规则、边界或风险约束？
 
-## Validation
+## 验证
 
-- Which checks must pass?
-- What manual verification is needed?
+- 哪些检查必须通过？
+- 需要哪些人工验证？
 
-## Deliverables
+## 交付物
 
-- Which files, docs, or artifacts should exist when done?
+- 完成后应产出哪些文件、文档或其他结果？
 
-## Notes For The Next Agent
+## 给下一个智能体的说明
 
-- What context should survive beyond the current chat?
+- 哪些上下文应该脱离当前聊天继续保留？

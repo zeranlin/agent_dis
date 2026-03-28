@@ -1,26 +1,24 @@
-# Change Checklist
+# 变更清单
 
-Use this checklist for human and agent-authored changes.
+这份清单适用于人和智能体共同提交的变更。
 
-## Before Coding
+## 编码前
 
-1. Read `AGENTS.md` and the linked documents.
-2. Confirm where the change belongs.
-3. Start from `docs/templates/task-template.md` for any new work item.
-4. Identify how the change will be validated.
+1. 阅读 `AGENTS.md` 及其链接的文档。
+2. 确认这次改动应该放在哪个位置。
+3. 对于新的工作项，从 `docs/templates/task-template.md` 开始。
+4. 明确这次改动将如何验证。
 
-## While Coding
+## 编码中
 
-1. Keep the change small enough to review quickly.
-2. Update documentation if behavior, workflow, or structure changes.
-3. Prefer extending existing scripts and checks instead of creating parallel
-   paths.
-4. Capture experiments and decisions as you learn, not only at the end.
+1. 保持改动足够小，便于快速审阅。
+2. 如果行为、流程或结构发生变化，同步更新文档。
+3. 优先扩展现有脚本和检查，而不是另起一套平行路径。
+4. 在过程中持续记录实验和决策，不要只在最后补写。
 
-## Before Review
+## 提交审阅前
 
-1. Run `make check`.
-2. Capture any additional manual validation performed.
-3. Confirm docs still match the repository state.
-4. If the change affected direction, architecture, or confidence, update the
-   relevant log in `docs/logs/`.
+1. 执行 `make check`。
+2. 记录额外做过的人工验证。
+3. 确认文档仍然与仓库状态一致。
+4. 如果这次改动影响了方向、架构或信心判断，更新 `docs/logs/` 中对应的日志。
