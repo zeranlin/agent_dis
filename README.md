@@ -28,6 +28,7 @@ make check
 - `docs/runbooks/`：可复用的工作流与变更清单
 - `.github/`：Pull Request 模板
 - `app/`：V1 最小服务骨架
+- `assets/`：V1 审查规则包与任务指令资产
 - `tests/`：最小自动化验证
 
 ## 工作原则

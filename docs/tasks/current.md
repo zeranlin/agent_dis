@@ -50,6 +50,8 @@
 - 已完成第一轮技术收口，补齐并发写保护、状态机口径统一和 Mermaid 规范修正
 - 已完成对第一轮技术收口结果的复审，并向 T 发出上传失败态补充收口要求
 - 已完成上传异常失败态补充收口，补齐 `failed` 状态兜底与对应测试
+- 已向 T 发出进入下一轮实现准备的正式消息
+- 已落解析 worker 和规则资产加载器最小实现，链路可推进到 `upload_validated -> parsing -> parsed`
 
 ## 当前结论
 
@@ -69,6 +71,7 @@
 - V1 已从纯文档阶段进入最小代码实现阶段，上传接口与任务状态查询已有可运行骨架
 - V1 最小服务骨架已完成第一轮稳定性与一致性收口，可继续推进下一步实现准备
 - V1 上传链路在文件落地异常时已能正确记录 `failed` 状态，不再残留 `created` 任务
+- V1 输入链路已从仅上传推进到最小解析完成态，下一步可进入审查输入装配准备
 
 ## 当前任务列表
 
@@ -93,14 +96,15 @@
 - 落地上传接口和任务状态模型的最小代码实现
 - 完成第一轮技术收口，修复并发写保护、状态口径一致性和文档规范问题
 - 完成上传异常失败态补充收口，修复上传落地失败时的状态残留问题
+- 落解析 worker 与规则资产加载器，推进输入链路到 `parsed`
 
 ## 下一步建议
 
-- 由技术负责人 T 在上传失败态补充收口完成后，继续推进解析 worker 和规则资产加载器，实现 `upload_validated -> parsing -> parsed` 实链路
+- 由技术负责人 T 基于当前解析结果对象和规则资产，继续推进审查输入装配与审查执行最小实现
 
 ## 阻塞或待确认
 
-- 上传接口和任务状态模型已完成失败态补充收口，下一阶段主要待补齐解析 worker、规则资产加载器和更完整输入链路测试
+- 上传接口、解析 worker 和规则资产加载器已落地，下一阶段主要待补齐审查输入装配、审查执行和更完整链路测试
 
 ## 当前交接主题
 
@@ -123,6 +127,8 @@
 - 在现有最小服务骨架上继续实现解析链路和规则资产加载
 - 在第一轮技术收口完成后继续推进下一轮实现准备
 - 在上传异常失败态补充收口完成后进入下一轮输入链路扩展
+- 当前已获准进入下一轮实现准备，优先补解析 worker 和规则资产加载器
+- 在当前输入链路跑通后继续推进审查输入装配和执行能力
 - 若发现产品范围冲突，回提总负责人确认，不自行改写产品边界
 
 ## 关联文档
@@ -162,9 +168,15 @@
 - `docs/tech/v1/development-plan.md`
 - `docs/tech/v1/risk-and-assumption.md`
 - `docs/tech/v1/implementation-prep-round-1.md`
+- `docs/tech/v1/implementation-prep-round-2.md`
 - `docs/tech/v1/architecture-layering.md`
 - `app/server.py`
 - `app/models.py`
 - `app/repository.py`
 - `app/upload_service.py`
+- `app/parser_worker.py`
+- `app/asset_loader.py`
+- `assets/review/rule-packs/default-rule-pack.v1.yaml`
+- `assets/review/prompts/review-task-instruction.v1.md`
 - `tests/test_upload_api.py`
+- `tests/test_parse_worker.py`

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 
 
@@ -90,6 +90,41 @@ class DocumentRecord:
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
+    def with_updates(self, **changes: object) -> "DocumentRecord":
+        return replace(self, **changes)
+
+
+@dataclass
+class ChapterRecord:
+    chapter_id: str
+    document_id: str
+    parent_chapter_id: str | None
+    chapter_title: str
+    chapter_order: int
+    page_start: int
+    page_end: int
+    chapter_text: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass
+class ClauseRecord:
+    clause_id: str
+    document_id: str
+    chapter_id: str
+    clause_type: str
+    clause_order: int
+    clause_text: str
+    normalized_text: str
+    location_label: str
+    page_start: int
+    page_end: int
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
 
 def build_review_task(
     *,
@@ -140,4 +175,47 @@ def build_document_record(
         parsed_status="pending",
         page_count=0,
         created_at=now_iso(),
+    )
+
+
+def build_chapter_record(
+    *,
+    chapter_id: str,
+    document_id: str,
+    chapter_title: str,
+    chapter_order: int,
+    chapter_text: str,
+) -> ChapterRecord:
+    return ChapterRecord(
+        chapter_id=chapter_id,
+        document_id=document_id,
+        parent_chapter_id=None,
+        chapter_title=chapter_title,
+        chapter_order=chapter_order,
+        page_start=1,
+        page_end=1,
+        chapter_text=chapter_text,
+    )
+
+
+def build_clause_record(
+    *,
+    clause_id: str,
+    document_id: str,
+    chapter_id: str,
+    clause_order: int,
+    clause_text: str,
+    location_label: str,
+) -> ClauseRecord:
+    return ClauseRecord(
+        clause_id=clause_id,
+        document_id=document_id,
+        chapter_id=chapter_id,
+        clause_type="未分类条款",
+        clause_order=clause_order,
+        clause_text=clause_text,
+        normalized_text=" ".join(clause_text.split()),
+        location_label=location_label,
+        page_start=1,
+        page_end=1,
     )

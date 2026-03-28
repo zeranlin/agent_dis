@@ -4,7 +4,7 @@ import json
 import threading
 from pathlib import Path
 
-from app.models import DocumentRecord, ReviewTask
+from app.models import ChapterRecord, ClauseRecord, DocumentRecord, ReviewTask
 
 
 class JsonRepository:
@@ -21,6 +21,8 @@ class JsonRepository:
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         self.tasks_path = self.metadata_dir / "review_tasks.json"
         self.documents_path = self.metadata_dir / "documents.json"
+        self.chapters_path = self.metadata_dir / "chapters.json"
+        self.clauses_path = self.metadata_dir / "clauses.json"
 
     def save_task(self, task: ReviewTask) -> None:
         self._update_json_mapping(self.tasks_path, task.task_id, task.to_dict())
@@ -34,6 +36,19 @@ class JsonRepository:
 
     def save_document(self, document: DocumentRecord) -> None:
         self._update_json_mapping(self.documents_path, document.document_id, document.to_dict())
+
+    def get_document(self, document_id: str) -> DocumentRecord | None:
+        documents = self._read_json(self.documents_path)
+        data = documents.get(document_id)
+        if data is None:
+            return None
+        return DocumentRecord(**data)
+
+    def save_chapter(self, chapter: ChapterRecord) -> None:
+        self._update_json_mapping(self.chapters_path, chapter.chapter_id, chapter.to_dict())
+
+    def save_clause(self, clause: ClauseRecord) -> None:
+        self._update_json_mapping(self.clauses_path, clause.clause_id, clause.to_dict())
 
     def save_upload(self, task_id: str, file_name: str, content: bytes) -> Path:
         target_path = self.upload_dir / f"{task_id}-{file_name}"
@@ -49,6 +64,16 @@ class JsonRepository:
         }
         self._write_json(queue_path, payload)
         return queue_path
+
+    def list_parse_jobs(self) -> list[Path]:
+        return sorted(self.queue_dir.glob("*.json"))
+
+    def read_parse_job(self, path: Path) -> dict[str, object]:
+        return self._read_json(path)
+
+    def delete_parse_job(self, path: Path) -> None:
+        if path.exists():
+            path.unlink()
 
     def _update_json_mapping(self, path: Path, record_id: str, payload: dict[str, object]) -> None:
         lock = self._lock_for(path)
