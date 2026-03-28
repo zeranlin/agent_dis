@@ -9,7 +9,7 @@
 - `docs/templates/` 定义任务接入模板。
 - `docs/logs/` 记录实验和决策过程。
 - `scripts/check-harness.sh` 用来校验仓库最小契约。
-- `scripts/check-agent-quality.sh` 用来校验智能体产出质量规则。
+- `scripts/check-agent-quality.sh` 用来校验智能体产出质量评估规则。
 - `Makefile` 提供统一的本地检查入口。
 
 ## 快速开始

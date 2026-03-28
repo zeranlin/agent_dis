@@ -15,7 +15,7 @@ check_file_contains() {
 }
 
 required_files=(
-  "docs/standards/agent-quality-rubric.md"
+  "docs/standards/agent-quality-rules.md"
   "docs/templates/task-template.md"
   "docs/logs/experiments.md"
   "docs/logs/decisions.md"
@@ -37,9 +37,9 @@ check_file_contains "docs/logs/experiments.md" "结果："
 check_file_contains "docs/logs/decisions.md" "## 记录模板"
 check_file_contains "docs/logs/decisions.md" "决策："
 check_file_contains "docs/logs/decisions.md" "影响："
-check_file_contains "docs/standards/agent-quality-rubric.md" "## 评分维度"
-check_file_contains "docs/standards/agent-quality-rubric.md" "## 最小契约"
-check_file_contains "docs/standards/agent-quality-rubric.md" "## 审阅问题"
+check_file_contains "docs/standards/agent-quality-rules.md" "## 评分维度"
+check_file_contains "docs/standards/agent-quality-rules.md" "## 最小契约"
+check_file_contains "docs/standards/agent-quality-rules.md" "## 审阅问题"
 
 md_files=(
   "README.md"
@@ -49,7 +49,7 @@ md_files=(
   "docs/logs/experiments.md"
   "docs/logs/decisions.md"
   "docs/runbooks/change-checklist.md"
-  "docs/standards/agent-quality-rubric.md"
+  "docs/standards/agent-quality-rules.md"
   "docs/standards/coding.md"
   "docs/standards/repository-contract.md"
   "docs/templates/task-template.md"

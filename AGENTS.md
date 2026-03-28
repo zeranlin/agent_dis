@@ -9,7 +9,7 @@
 1. `README.md`
 2. `docs/architecture.md`
 3. `docs/standards/repository-contract.md`
-4. `docs/standards/agent-quality-rubric.md`
+4. `docs/standards/agent-quality-rules.md`
 5. `docs/runbooks/change-checklist.md`
 
 然后执行：
@@ -31,7 +31,7 @@ make check
 - 架构与边界：`docs/architecture.md`
 - 仓库约束：`docs/standards/repository-contract.md`
 - 编码规范：`docs/standards/coding.md`
-- 智能体质量评分规则：`docs/standards/agent-quality-rubric.md`
+- 智能体质量评估规则：`docs/standards/agent-quality-rules.md`
 - 任务模板：`docs/templates/task-template.md`
 - 实验记录：`docs/logs/experiments.md`
 - 决策记录：`docs/logs/decisions.md`

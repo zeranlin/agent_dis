@@ -10,7 +10,7 @@
 - `AGENTS.md`
 - `docs/architecture.md`
 - `docs/standards/coding.md`
-- `docs/standards/agent-quality-rubric.md`
+- `docs/standards/agent-quality-rules.md`
 - `docs/runbooks/change-checklist.md`
 - `docs/templates/task-template.md`
 - `docs/logs/experiments.md`
