@@ -4,7 +4,15 @@ import json
 import threading
 from pathlib import Path
 
-from app.models import ChapterRecord, ClauseRecord, DocumentRecord, EvidenceItemRecord, ReviewTask, RiskItemRecord
+from app.models import (
+    ChapterRecord,
+    ClauseRecord,
+    DocumentRecord,
+    EvidenceItemRecord,
+    ReviewResultRecord,
+    ReviewTask,
+    RiskItemRecord,
+)
 
 
 class JsonRepository:
@@ -17,16 +25,24 @@ class JsonRepository:
         self.upload_dir = self.root_dir / "uploads"
         self.queue_dir = self.root_dir / "queues" / "parse"
         self.review_queue_dir = self.root_dir / "queues" / "review"
+        self.result_queue_dir = self.root_dir / "queues" / "result"
+        self.output_dir = self.root_dir / "outputs"
+        self.report_dir = self.output_dir / "reports"
+        self.conclusion_dir = self.output_dir / "conclusions"
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.queue_dir.mkdir(parents=True, exist_ok=True)
         self.review_queue_dir.mkdir(parents=True, exist_ok=True)
+        self.result_queue_dir.mkdir(parents=True, exist_ok=True)
+        self.report_dir.mkdir(parents=True, exist_ok=True)
+        self.conclusion_dir.mkdir(parents=True, exist_ok=True)
         self.tasks_path = self.metadata_dir / "review_tasks.json"
         self.documents_path = self.metadata_dir / "documents.json"
         self.chapters_path = self.metadata_dir / "chapters.json"
         self.clauses_path = self.metadata_dir / "clauses.json"
         self.risks_path = self.metadata_dir / "risks.json"
         self.evidences_path = self.metadata_dir / "evidences.json"
+        self.results_path = self.metadata_dir / "results.json"
 
     def save_task(self, task: ReviewTask) -> None:
         self._update_json_mapping(self.tasks_path, task.task_id, task.to_dict())
@@ -87,6 +103,16 @@ class JsonRepository:
         ]
         return sorted(evidence_records, key=lambda item: item.evidence_id)
 
+    def save_result(self, result: ReviewResultRecord) -> None:
+        self._update_json_mapping(self.results_path, result.result_id, result.to_dict())
+
+    def get_result_by_task(self, task_id: str) -> ReviewResultRecord | None:
+        results = self._read_json(self.results_path)
+        for payload in results.values():
+            if payload["task_id"] == task_id:
+                return ReviewResultRecord(**payload)
+        return None
+
     def save_upload(self, task_id: str, file_name: str, content: bytes) -> Path:
         target_path = self.upload_dir / f"{task_id}-{file_name}"
         target_path.write_bytes(content)
@@ -112,11 +138,24 @@ class JsonRepository:
         self._write_json(queue_path, payload)
         return queue_path
 
+    def enqueue_result_job(self, task: ReviewTask) -> Path:
+        queue_path = self.result_queue_dir / f"{task.task_id}.json"
+        payload = {
+            "task_id": task.task_id,
+            "document_id": task.document_id,
+            "internal_status": task.internal_status,
+        }
+        self._write_json(queue_path, payload)
+        return queue_path
+
     def list_parse_jobs(self) -> list[Path]:
         return sorted(self.queue_dir.glob("*.json"))
 
     def list_review_jobs(self) -> list[Path]:
         return sorted(self.review_queue_dir.glob("*.json"))
+
+    def list_result_jobs(self) -> list[Path]:
+        return sorted(self.result_queue_dir.glob("*.json"))
 
     def read_parse_job(self, path: Path) -> dict[str, object]:
         return self._read_json(path)
@@ -131,6 +170,23 @@ class JsonRepository:
     def delete_review_job(self, path: Path) -> None:
         if path.exists():
             path.unlink()
+
+    def read_result_job(self, path: Path) -> dict[str, object]:
+        return self._read_json(path)
+
+    def delete_result_job(self, path: Path) -> None:
+        if path.exists():
+            path.unlink()
+
+    def save_report_markdown(self, task_id: str, content: str) -> Path:
+        target_path = self.report_dir / f"{task_id}-审查报告.md"
+        target_path.write_text(content, encoding="utf-8")
+        return target_path
+
+    def save_conclusion_markdown(self, task_id: str, content: str) -> Path:
+        target_path = self.conclusion_dir / f"{task_id}-最终结论.md"
+        target_path.write_text(content, encoding="utf-8")
+        return target_path
 
     def _update_json_mapping(self, path: Path, record_id: str, payload: dict[str, object]) -> None:
         lock = self._lock_for(path)

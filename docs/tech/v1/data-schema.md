@@ -259,6 +259,13 @@ V1 首版至少要持久化：
 - `evidence_item`
 - `review_result`
 
+当前最小代码实现已正式落地 `review_result`，并为结果产物补充：
+
+- `report_file_path`
+- `conclusion_file_path`
+
+用于支撑结果页查看和 Markdown 下载能力的后续实现。
+
 如果时间有限，`procurement_project` 和 `document_chapter` 可先以轻量表或文档形式落地，但字段语义应提前固定。
 
 ## 9. 接口映射建议

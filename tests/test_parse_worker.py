@@ -8,6 +8,7 @@ from pathlib import Path
 from app.asset_loader import ReviewAssetLoader
 from app.parser_worker import ParseWorker
 from app.repository import JsonRepository
+from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
 from app.review_executor import ReviewExecutor
 from app.upload_service import UploadFile, UploadService
@@ -124,3 +125,45 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertEqual(len(evidences), 1)
             self.assertTrue(evidences[0].quoted_text)
             self.assertEqual(list((Path(runtime_dir) / "queues" / "review").glob("*.json")), [])
+            self.assertEqual(len(list((Path(runtime_dir) / "queues" / "result").glob("*.json"))), 1)
+
+    def test_result_aggregator_generates_result_and_marks_task_completed(self):
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=(
+                        "第一章 资格要求\n"
+                        "1.1 供应商资格\n"
+                        "供应商须本地注册并在本地办公。\n"
+                        "第二章 评分办法\n"
+                        "2.1 评分标准\n"
+                        "采用综合评价并可酌情打分。\n"
+                    ).encode("utf-8"),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+            ReviewExecutor(repository, root_dir).run_pending_jobs()
+
+            processed_count = ResultAggregator(repository, root_dir).run_pending_jobs()
+
+            self.assertEqual(processed_count, 1)
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            self.assertEqual(task.internal_status, "completed")
+            self.assertEqual(task.status, "completed")
+            self.assertIsNotNone(task.completed_at)
+
+            result = repository.get_result_by_task(upload_response["task_id"])
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.status, "completed")
+            self.assertIn("高风险问题", result.overall_conclusion)
+            self.assertIn("# 审查报告", result.report_markdown)
+            self.assertIn("# 最终结论", result.conclusion_markdown)
+            self.assertTrue(Path(result.report_file_path).exists())
+            self.assertTrue(Path(result.conclusion_file_path).exists())
+            self.assertEqual(list((Path(runtime_dir) / "queues" / "result").glob("*.json")), [])

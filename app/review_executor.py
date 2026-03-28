@@ -77,6 +77,7 @@ class ReviewExecutor:
 
             task.transition_to("aggregating", f"审查执行完成，已生成 {total_findings} 条中间审查结果，待结果汇总。")
             self.repository.save_task(task)
+            self.repository.enqueue_result_job(task)
         except Exception as exc:
             task.mark_failed(
                 error_code="REVIEW_EXECUTION_FAILED",

@@ -177,6 +177,28 @@ class ReviewRuntimeInput:
     output_schema: dict[str, object]
 
 
+@dataclass
+class ReviewResultRecord:
+    result_id: str
+    task_id: str
+    project_id: str
+    document_id: str
+    status: str
+    summary_title: str
+    overall_conclusion: str
+    report_markdown: str
+    conclusion_markdown: str
+    risk_count_high: int
+    risk_count_medium: int
+    risk_count_low: int
+    report_file_path: str
+    conclusion_file_path: str
+    generated_at: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
 def build_review_task(
     *,
     task_id: str,
@@ -328,4 +350,39 @@ def build_evidence_item_record(
         evidence_note=evidence_note,
         page_start=1,
         page_end=1,
+    )
+
+
+def build_review_result_record(
+    *,
+    result_id: str,
+    task_id: str,
+    project_id: str,
+    document_id: str,
+    summary_title: str,
+    overall_conclusion: str,
+    report_markdown: str,
+    conclusion_markdown: str,
+    risk_count_high: int,
+    risk_count_medium: int,
+    risk_count_low: int,
+    report_file_path: str,
+    conclusion_file_path: str,
+) -> ReviewResultRecord:
+    return ReviewResultRecord(
+        result_id=result_id,
+        task_id=task_id,
+        project_id=project_id,
+        document_id=document_id,
+        status="completed",
+        summary_title=summary_title,
+        overall_conclusion=overall_conclusion,
+        report_markdown=report_markdown,
+        conclusion_markdown=conclusion_markdown,
+        risk_count_high=risk_count_high,
+        risk_count_medium=risk_count_medium,
+        risk_count_low=risk_count_low,
+        report_file_path=report_file_path,
+        conclusion_file_path=conclusion_file_path,
+        generated_at=now_iso(),
     )

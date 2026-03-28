@@ -28,6 +28,7 @@
 - `architecture-layering.md`：V1 技术架构与分层方案，统一说明系统分层、模块边界、关键链路、状态流转和主要风险
 - `implementation-prep-round-2.md`：第二轮实现准备，聚焦解析 worker、规则资产加载器、状态推进和最小测试，并明确当前解析仅为占位实现
 - `implementation-prep-round-3.md`：第三轮实现准备，聚焦审查输入装配、规则运行时组装、审查执行最小骨架和中间结果对象落地
+- `implementation-prep-round-4.md`：第四轮实现准备，聚焦结果汇总、最终结论生成、Markdown 报告导出与结果对象落地
 
 ## 当前规则
 
