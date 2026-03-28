@@ -29,6 +29,7 @@
 - `implementation-prep-round-2.md`：第二轮实现准备，聚焦解析 worker、规则资产加载器、状态推进和最小测试，并明确当前解析仅为占位实现
 - `implementation-prep-round-3.md`：第三轮实现准备，聚焦审查输入装配、规则运行时组装、审查执行最小骨架和中间结果对象落地
 - `implementation-prep-round-4.md`：第四轮实现准备，聚焦结果汇总、最终结论生成、Markdown 报告导出与结果对象落地
+- `implementation-prep-round-5.md`：第五轮实现准备，聚焦最小 worker 运行入口、运行闭环测试与闭环表述收口
 
 ## 当前规则
 

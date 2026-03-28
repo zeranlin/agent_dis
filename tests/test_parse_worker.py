@@ -12,6 +12,7 @@ from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
 from app.review_executor import ReviewExecutor
 from app.upload_service import UploadFile, UploadService
+from app.worker_runner import WorkerRunner
 
 
 class ParseWorkerTestCase(unittest.TestCase):
@@ -166,4 +167,41 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("# 最终结论", result.conclusion_markdown)
             self.assertTrue(Path(result.report_file_path).exists())
             self.assertTrue(Path(result.conclusion_file_path).exists())
+            self.assertEqual(list((Path(runtime_dir) / "queues" / "result").glob("*.json")), [])
+
+    def test_worker_runner_processes_uploaded_task_to_completed(self):
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.pdf",
+                    content=(
+                        "第一章 资格要求\n"
+                        "1.1 供应商资格\n"
+                        "供应商须本地注册并在本地办公。\n"
+                        "第二章 评分办法\n"
+                        "2.1 评分标准\n"
+                        "采用综合评价并可酌情打分。\n"
+                    ).encode("utf-8"),
+                )
+            )
+
+            result = WorkerRunner(repository, root_dir).run_until_idle()
+
+            self.assertGreaterEqual(result["rounds"], 2)
+            self.assertEqual(result["parse_jobs"], 1)
+            self.assertEqual(result["review_jobs"], 1)
+            self.assertEqual(result["result_jobs"], 1)
+
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            self.assertEqual(task.internal_status, "completed")
+            self.assertEqual(task.status, "completed")
+
+            stored_result = repository.get_result_by_task(upload_response["task_id"])
+            self.assertIsNotNone(stored_result)
+            self.assertEqual(list((Path(runtime_dir) / "queues" / "parse").glob("*.json")), [])
+            self.assertEqual(list((Path(runtime_dir) / "queues" / "review").glob("*.json")), [])
             self.assertEqual(list((Path(runtime_dir) / "queues" / "result").glob("*.json")), [])
