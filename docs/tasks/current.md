@@ -11,6 +11,11 @@
 ## 当前目标
 
 - 在不扩 `V1` 范围的前提下，先查清 `SZCG2025000300-A` 首轮 `3` 组规则补强为何未在最新真实结果中被验证出来，并完成一轮受控复跑
+- 当前整体推进顺序已正式固定为：
+- `1. 先完成 300-A 首轮补强链路核查`
+- `2. 再完成 300-A 受控复跑与人工差异对照`
+- `3. 然后判断是否放行默认规则包 1.1`
+- `4. 最后再决定是否继续扩到程序规则和政策功能规则`
 
 ## 当前结论
 
@@ -361,6 +366,7 @@
 - 下一步先压制品牌 / 型号旧噪声在报价表说明、合同说明与知识产权条款上的误报
 - 下一步基于 `300-A` 重新做一轮受控复跑，并明确回提人工 `19` 条埋点中新增覆盖了哪些
 - 在上述问题未查清前，不进入剩余 `2` 组规则补强专题
+- 在上述问题未查清前，不启动默认规则包 `1.1` 升级实现
 - 如无新的阻塞性交付缺口，不建议回头继续做页面或报告微调
 - 若无新的阻塞性交付缺口，不建议回头拉长实现主题
 - 当前不建议直接扩成完整三级对象体系
@@ -390,6 +396,7 @@
 - `docs/tech/v1/rule-gap-remediation-plan-300-a.md`
 - `docs/tech/v1/rule-gap-remediation-round-1.md`
 - `docs/tech/v1/rule-gap-remediation-round-1-review.md`
+- `docs/tech/v1/current-overall-plan.md`
 - `docs/tech/v1/result-aggregation-round-1.md`
 - `docs/tech/v1/long-clause-splitting-round-1.md`
 - `docs/tech/v1/llm-v1-acceptance-validation-round-1.md`
