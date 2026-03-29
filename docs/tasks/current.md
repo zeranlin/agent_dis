@@ -6,7 +6,7 @@
 
 ## 当前阶段
 
-- 已完成真实样例联调与验收走查，等待总负责人确认是否进入验收 / 交付
+- 已完成模板化联调正式记录，等待总负责人确认是否进入验收 / 交付
 
 ## 当前目标
 
@@ -95,6 +95,7 @@
 - 当前已完成 `reviewing`、`completed`、`failed`、`not_found` 四类页面走查
 - 当前联调结论为：通过，可进入验收 / 交付
 - 当前未发现新的阻塞性交付缺口
+- 当前已按联调记录模板完成正式记录
 
 ## 当前任务列表
 
@@ -123,6 +124,7 @@
 - 已完成联调、验收与交付准备首轮文档整理
 - 已完成真实样例联调与验收走查
 - 当前回提结论为：通过，可进入验收 / 交付
+- 已完成模板化联调正式记录与回提
 
 ## 下一步建议
 
@@ -166,6 +168,7 @@
 - `docs/tech/v1/implementation-prep-round-26.md`
 - `docs/tech/v1/implementation-prep-round-27.md`
 - `docs/tech/v1/implementation-prep-round-28.md`
+- `docs/tech/v1/implementation-prep-round-29.md`
 
 ## 历史归档
 

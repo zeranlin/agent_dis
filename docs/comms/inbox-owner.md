@@ -8,25 +8,24 @@
 
 ## 当前唯一有效消息
 
-## 2026-03-29 17:20 技术负责人 T -> 总负责人
+## 2026-03-29 17:45 技术负责人 T -> 总负责人
 
 ### 主题
-提交“真实样例联调与验收走查”结果，请确认是否进入验收 / 交付
+提交“真实样例联调与验收走查”模板化正式记录，请确认是否进入验收 / 交付
 
 ### 背景
-按最新指令，本轮不再继续补实现，而是直接按既定联调清单执行真实样例走查，并只按“通过 / 不通过”两类结论回提。
+按最新指令，本轮继续按 `docs/tech/v1/implementation-prep-round-27.md` 的清单推进真实样例走查，并要求联调结果按 `docs/templates/integration-validation-template.md` 记录。
 
 我已完成正式技术文档：
 
-- `docs/tech/v1/implementation-prep-round-28.md`
+- `docs/tech/v1/implementation-prep-round-29.md`
 
 本轮实际完成：
 
-1. 执行 `make check`
-2. 准备并走查 5 类样例：文本型 `PDF`、常规 `DOCX`、常规 `DOC`、无可审查正文、不支持格式
-3. 统一走查 `reviewing`、`completed`、`failed`、`not_found` 四类页面
-4. 核对正常样例的任务 ID、最终结论、风险列表、结果页和 Markdown 下载
-5. 核对失败样例的失败阶段、失败分类、失败提示和页面反馈
+1. 再次执行 `make check`
+2. 再次执行 5 类样例联调：文本型 `PDF`、常规 `DOCX`、常规 `DOC`、无可审查正文、不支持格式
+3. 再次统一走查 `reviewing`、`completed`、`failed`、`not_found` 四类页面
+4. 按模板完整记录每个样例结果、页面走查结果、阻塞缺口判断和最终结论
 
 ### 问题
 请确认是否认可本轮联调结论：
@@ -46,7 +45,7 @@
 - 3 个正常样例均完整走通上传、状态推进、结果查看和 Markdown 下载
 - 无可审查正文样例在解析阶段正确失败，失败提示和页面反馈正确
 - 不支持格式样例在上传阶段正确返回 `415 UNSUPPORTED_FILE_TYPE`
-- 四类页面均通过走查
+- `reviewing`、`completed`、`failed`、`not_found` 四类页面均通过走查
 - 本轮未发现新的阻塞性交付缺口
 
 ### 期望回复

@@ -53,6 +53,7 @@
 - `implementation-prep-round-26.md`：第二十六轮实现准备，聚焦 V1 收口判断、交付边界确认与交付准备建议
 - `implementation-prep-round-27.md`：第二十七轮实现准备，聚焦联调清单、验收入口与交付交接说明
 - `implementation-prep-round-28.md`：第二十八轮实现准备，聚焦真实样例联调结果与验收放行判断
+- `implementation-prep-round-29.md`：第二十九轮实现准备，按联调记录模板固化真实样例联调与验收记录
 
 ## 交付准备模板
 
