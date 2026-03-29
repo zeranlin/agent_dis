@@ -11,6 +11,17 @@ from app.review_assembler import ReviewInputAssembler
 
 MIN_RETRY_CLAUSE_MAX_CHARS = 300
 HIGH_PRIORITY_RULE_CODES = {"R1", "R3", "R5", "R9", "R12"}
+HIGH_VALUE_SECTION_KEYWORDS = (
+    "资格",
+    "评分",
+    "评审",
+    "技术",
+    "参数",
+    "商务",
+    "偏离",
+    "合同",
+    "服务",
+)
 
 
 class ReviewExecutor:
@@ -42,15 +53,20 @@ class ReviewExecutor:
                 str(rule["rule_code"]): rule
                 for rule in runtime_input.rules
             }
+            candidate_clauses = _select_candidate_clauses(
+                clauses=runtime_input.clauses,
+                rules=runtime_input.rules,
+                max_clauses=getattr(self.client, "max_clauses", len(runtime_input.clauses)),
+            )
             clauses_by_id = {
                 clause.clause_id: clause
-                for clause in runtime_input.clauses
+                for clause in candidate_clauses
             }
             total_findings = 0
             seen_keys: set[tuple[str, str, str]] = set()
 
             for clause_batch in _chunk_clauses_for_review(
-                runtime_input.clauses,
+                candidate_clauses,
                 batch_size=self.client.batch_size,
                 clause_max_chars=self.client.clause_max_chars,
                 batch_char_budget=self.client.batch_char_budget,
@@ -118,7 +134,13 @@ class ReviewExecutor:
                     self.repository.save_risk(risk)
                     self.repository.save_evidence(evidence)
 
-            task.transition_to("aggregating", f"审查执行完成，已生成 {total_findings} 条中间审查结果，待结果汇总。")
+            task.transition_to(
+                "aggregating",
+                (
+                    f"审查执行完成，候选片段 {len(candidate_clauses)}/{len(runtime_input.clauses)}，"
+                    f"已生成 {total_findings} 条中间审查结果，待结果汇总。"
+                ),
+            )
             self.repository.save_task(task)
             self.repository.enqueue_result_job(task)
         except Exception as exc:
@@ -271,6 +293,60 @@ def _build_batch_payload(
             "同一条款同一规则只输出一次，不要用近义理由重复输出。",
         ],
     }
+
+
+def _select_candidate_clauses(
+    *,
+    clauses: list[object],
+    rules: list[dict[str, object]],
+    max_clauses: int,
+) -> list[object]:
+    if len(clauses) <= max_clauses:
+        return list(clauses)
+
+    scored: list[tuple[int, int, object]] = []
+    for clause in clauses:
+        score = _score_clause_candidate(clause=clause, rules=rules)
+        scored.append((score, int(getattr(clause, "clause_order", 0)), clause))
+
+    prioritized = sorted(
+        scored,
+        key=lambda item: (-item[0], item[1]),
+    )
+    selected = [item[2] for item in prioritized[:max_clauses]]
+    return sorted(selected, key=lambda clause: int(getattr(clause, "clause_order", 0)))
+
+
+def _score_clause_candidate(*, clause: object, rules: list[dict[str, object]]) -> int:
+    score = 0
+    chapter_title = str(getattr(clause, "chapter_title", ""))
+    clause_type = str(getattr(clause, "clause_type", ""))
+    clause_text = str(getattr(clause, "clause_text", ""))
+    combined_text = f"{chapter_title}\n{clause_text}"
+
+    if clause_type == "条款片段":
+        score += 2
+    if any(keyword in chapter_title for keyword in HIGH_VALUE_SECTION_KEYWORDS):
+        score += 3
+
+    matched_high_priority = 0
+    matched_normal_priority = 0
+    for rule in rules:
+        if not _rule_matches_batch_text(rule=rule, batch_text=combined_text):
+            continue
+        rule_code = str(rule.get("rule_code") or "")
+        if rule_code in HIGH_PRIORITY_RULE_CODES:
+            matched_high_priority += 1
+        else:
+            matched_normal_priority += 1
+
+    score += min(matched_high_priority, 3) * 3
+    score += min(matched_normal_priority, 3)
+
+    text_length = len(clause_text.strip())
+    if 40 <= text_length <= 800:
+        score += 1
+    return score
 
 
 def _select_rules_for_clause_batch(

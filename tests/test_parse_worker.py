@@ -23,6 +23,7 @@ from app.review_executor import (
     _build_batch_payload,
     _chunk_clauses_for_review,
     _next_retry_clause_max_chars,
+    _select_candidate_clauses,
     _select_rules_for_clause_batch,
 )
 from app.upload_service import UploadFile, UploadService
@@ -837,6 +838,74 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertIn("R9", [rule["rule_code"] for rule in selected])
         self.assertIn("R5", [rule["rule_code"] for rule in selected])
 
+    def test_select_candidate_clauses_prefers_high_value_sections_and_matches(self):
+        rules = [
+            {
+                "rule_code": "R1",
+                "rule_name": "地域限制检查",
+                "hit_definition": "出现本地注册、本地办公时命中。",
+                "focus_terms": ["本地注册", "本地办公"],
+                "positive_examples": ["供应商须本地注册并在本地办公。"],
+            },
+            {
+                "rule_code": "R9",
+                "rule_name": "评分项未量化检查",
+                "hit_definition": "出现综合评价、酌情打分时命中。",
+                "focus_terms": ["综合评价", "酌情打分"],
+                "positive_examples": ["采用综合评价并可酌情打分。"],
+            },
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="c1",
+                document_id="d1",
+                chapter_id="ch1",
+                chapter_title="第一章 总则",
+                clause_order=1,
+                clause_text="项目概况说明。",
+                location_label="第一章 总则 / 1.1",
+                clause_type="段落片段",
+            ),
+            build_clause_record(
+                clause_id="c2",
+                document_id="d1",
+                chapter_id="ch2",
+                chapter_title="第二章 资格要求",
+                clause_order=2,
+                clause_text="供应商须本地注册并在本地办公。",
+                location_label="第二章 资格要求 / 2.1",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="c3",
+                document_id="d1",
+                chapter_id="ch3",
+                chapter_title="第三章 评分办法",
+                clause_order=3,
+                clause_text="采用综合评价并可酌情打分。",
+                location_label="第三章 评分办法 / 3.1",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="c4",
+                document_id="d1",
+                chapter_id="ch4",
+                chapter_title="第四章 其他说明",
+                clause_order=4,
+                clause_text="一般说明文字。",
+                location_label="第四章 其他说明 / 4.1",
+                clause_type="段落片段",
+            ),
+        ]
+
+        selected = _select_candidate_clauses(
+            clauses=clauses,
+            rules=rules,
+            max_clauses=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in selected], ["c2", "c3"])
+
     def test_review_input_assembler_builds_runtime_input(self):
         root_dir = Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory() as runtime_dir:
@@ -945,6 +1014,7 @@ class ParseWorkerTestCase(unittest.TestCase):
 
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:
+            max_clauses = 10
             batch_size = 4
             clause_max_chars = 800
             batch_char_budget = 1000
