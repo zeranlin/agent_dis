@@ -2,27 +2,28 @@
 
 ## 当前阶段
 
-- 前 `3` 份真实样例已阶段性收口；`SZCG2025000300-A` 人工差异导向规则补强第一轮首包实现已完成
+- 前 `3` 份真实样例已阶段性收口；`SZCG2025000300-A` 人工差异导向规则补强第一轮首包实现已完成；当前进入首轮补强链路核查与受控复跑
 
 ## 当前唯一目标
 
-- 在不扩 `V1` 范围的前提下，基于已完成的首轮实现，确认 `3` 组规则补强是否已达到进入第二轮能力补强的条件
+- 在不扩 `V1` 范围的前提下，先查清首轮 `3` 组规则补强为何未在最新真实结果中被验证出来，并基于 `300-A` 完成一轮受控复跑
 
 ## 当前要看什么
 
 1. `docs/status/summary.md`
 2. `docs/comms/inbox-t.md`
-3. `docs/business/v1/government-procurement-business-oriented-parsing-plan.md`
-4. `docs/business/government-procurement-compliance-ontology.md`
-5. `docs/business/government-procurement-review-framework.md`
-6. `docs/tech/v1/government-procurement-review-object-round-3.md`
-7. `docs/tech/v1/sample-risk-candidate-tuning-round-1.md`
-8. `docs/tech/v1/sample-quality-review-szcg2025000300-a.md`
-9. 必要时再读 `docs/tasks/current.md`
-10. 需要复盘时再读 `docs/tasks/archive/`
+3. `docs/tech/v1/rule-gap-remediation-round-1.md`
+4. `docs/tech/v1/rule-gap-remediation-round-1-review.md`
+5. `docs/tech/v1/rule-gap-remediation-plan-300-a.md`
+6. 必要时再读 `docs/tasks/current.md`
+7. 需要复盘时再读 `docs/tasks/archive/`
 
 ## 当前默认动作
 
+- 当前不要进入第二轮能力补强
+- 当前先核查首轮补强是否真正进入主链路
+- 当前先查清 `rule_code` 丢失与旧噪声放量的根因
+- 当前先把 `300-A` 的结果做成“可对照人工埋点”的版本
 - 保持 V1 极简边界
 - 当前实现目录统一留在 `app/`
 - 当前保留现有文本提取能力
@@ -215,4 +216,9 @@
 - 当前正式判断为：
 - 本轮 `3` 组规则补强已进入可执行代码路径
 - 当前实现仍保持 `V1` 极简边界
-- 当前可继续进入结果核对或第二轮能力补强
+- 当前已完成结果复核：
+- 最新真实结果任务为 `task_7343b8b385e0`
+- 当前结果共 `135` 条高风险，且 `rule_code` 全空
+- 当前结果仍被“品牌 / 型号指向检查”类旧噪声主导
+- 当前尚未证明首轮 `3` 组能力已经在真实结果中形成明显覆盖提升
+- 当前正式拍板为：不进入第二轮能力补强，先回到第一轮做链路核查和受控复跑
