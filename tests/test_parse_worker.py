@@ -218,6 +218,7 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("- 章节上下文：第一章 资格要求", markdown)
             self.assertIn("- 业务单元：未标注", markdown)
             self.assertIn("- 片段类型：条款片段", markdown)
+            self.assertIn("- 规则编号：rule_high", markdown)
             self.assertIn("### 风险组 1", markdown)
             self.assertIn("- 归并命中数：1", markdown)
 
@@ -328,6 +329,122 @@ class ParseWorkerTestCase(unittest.TestCase):
 
             self.assertEqual(len(risk_groups), 1)
             self.assertEqual(risk_groups[0]["merged_hit_count"], 2)
+
+    def test_group_risks_prefers_clause_metadata_for_display_fields(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            repository.save_clause(
+                build_clause_record(
+                    clause_id="clause_001",
+                    document_id="document_001",
+                    chapter_id="chapter_001",
+                    chapter_title="第五章 商务要求",
+                    clause_order=1,
+                    clause_text="★原厂保修，货物免费保修期 5 年。",
+                    location_label="第五章 商务要求 / 免费保修期 / ★原厂保修",
+                    module_type="合同条款",
+                    unit_type="商务项",
+                    unit_label="商务要求项",
+                    unit_name="免费保修期",
+                    clause_type="条款片段",
+                )
+            )
+            risk = build_risk_item_record(
+                risk_id="risk_r3",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_001",
+                rule={
+                    "rule_id": "R3",
+                    "rule_name": "资格条件过高检查",
+                    "risk_level": "中",
+                    "execution_level": "辅助提示",
+                    "rule_domain": "合法性规则",
+                    "file_module": "资格条件",
+                },
+                location_label="第五章 商务要求 / 免费保修期 / ★原厂保修，货物免费保修期 5 年。",
+                risk_description="原厂保修要求可能抬高竞争门槛。",
+                review_reasoning="业务单元：商务要求项（截断示例），属于第五章 商务要求的条款片段。",
+            )
+
+            risk_groups = group_risks(risks=[risk], repository=repository)
+
+            self.assertEqual(risk_groups[0]["chapter_title"], "第五章 商务要求")
+            self.assertEqual(risk_groups[0]["unit_label"], "商务要求项（免费保修期）")
+            self.assertEqual(risk_groups[0]["rule_code"], "R3")
+            self.assertEqual(risk_groups[0]["location_label"], "第五章 商务要求 / 免费保修期 / ★原厂保修")
+
+    def test_group_risks_hides_uncertain_r3_when_specific_r3_exists(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            repository.save_clause(
+                build_clause_record(
+                    clause_id="clause_specific",
+                    document_id="document_001",
+                    chapter_id="chapter_001",
+                    chapter_title="第五章 商务要求",
+                    clause_order=1,
+                    clause_text="★原厂保修，货物免费保修期 5 年。",
+                    location_label="第五章 商务要求 / 免费保修期",
+                    module_type="合同条款",
+                    unit_type="商务项",
+                    unit_label="商务要求项",
+                    unit_name="免费保修期",
+                    clause_type="条款片段",
+                )
+            )
+            repository.save_clause(
+                build_clause_record(
+                    clause_id="clause_uncertain",
+                    document_id="document_001",
+                    chapter_id="chapter_002",
+                    chapter_title="附件评分表",
+                    clause_order=2,
+                    clause_text="投标人具备非金属矿采矿许可证。",
+                    location_label="附件评分表 / 专家打分",
+                    module_type="其他",
+                    unit_type="条款",
+                    unit_label="不确定审查对象",
+                    unit_name="专家打分",
+                    clause_type="条款片段",
+                )
+            )
+            rule = {
+                "rule_id": "R3",
+                "rule_name": "资格条件过高检查",
+                "risk_level": "中",
+                "execution_level": "辅助提示",
+                "rule_domain": "合法性规则",
+                "file_module": "资格条件",
+            }
+            specific_risk = build_risk_item_record(
+                risk_id="risk_specific",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_specific",
+                rule=rule,
+                location_label="第五章 商务要求 / 免费保修期",
+                risk_description="原厂保修要求可能抬高竞争门槛。",
+                review_reasoning="业务单元：商务要求项，属于第五章 商务要求的条款片段。",
+            )
+            uncertain_risk = build_risk_item_record(
+                risk_id="risk_uncertain",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_uncertain",
+                rule=rule,
+                location_label="附件评分表 / 专家打分",
+                risk_description="存在无关资质要求。",
+                review_reasoning="业务单元：不确定审查对象，属于附件评分表的条款片段。",
+            )
+
+            risk_groups = group_risks(risks=[specific_risk, uncertain_risk], repository=repository)
+
+            self.assertEqual(len(risk_groups), 1)
+            self.assertEqual(risk_groups[0]["risk_id"], "risk_specific")
 
     def test_parse_worker_consumes_queue_and_marks_task_review_queued(self):
         with tempfile.TemporaryDirectory() as runtime_dir:

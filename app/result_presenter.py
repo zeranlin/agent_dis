@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from difflib import SequenceMatcher
+import re
 
 SEVERITY_ORDER = {"高": 0, "中": 1, "低": 2}
+GENERIC_UNIT_LABELS = {"普通条款", "普通表格行", "不确定审查对象", "未标注"}
 
 
 def extract_chapter_title(location_label: str, *, default: str = "") -> str:
@@ -61,6 +63,40 @@ def merge_texts(values: list[str], *, fallback: str = "无", limit: int | None =
     return "；".join(unique_values)
 
 
+def _normalize_location_label(location_label: str) -> str:
+    parts = [part.strip() for part in str(location_label).split(" / ") if part.strip()]
+    if not parts:
+        return "无"
+    if len(parts) <= 3:
+        return " / ".join(parts)
+    return " / ".join(parts[:3])
+
+
+def _format_unit_display(*, unit_label: str, unit_name: str) -> str:
+    label = str(unit_label).strip() or "未标注"
+    name = str(unit_name).strip()
+    if len(name) > 48:
+        name = f"{name[:45].rstrip()}..."
+    if not name or name in label or label in GENERIC_UNIT_LABELS:
+        return label
+    return f"{label}（{name}）"
+
+
+def _normalize_rule_code(rule_id: str) -> str:
+    text = str(rule_id).strip()
+    matched = re.search(r"R\d+", text, re.IGNORECASE)
+    if matched:
+        return matched.group(0).upper()
+    return text
+
+
+def _extract_focus_summary(risk_groups: list[dict[str, object]]) -> str:
+    focus_titles = _unique_texts([str(group.get("risk_title") or "") for group in risk_groups], limit=3)
+    if not focus_titles:
+        return ""
+    return "、".join(focus_titles)
+
+
 def _risk_similarity(left: object, right: object) -> float:
     left_text = _normalize_text(f"{left.risk_description}{left.review_reasoning}")
     right_text = _normalize_text(f"{right.risk_description}{right.review_reasoning}")
@@ -79,6 +115,18 @@ def _should_merge_risk(representative: object, candidate: object) -> bool:
     if extract_chapter_title(str(representative.location_label)) != extract_chapter_title(str(candidate.location_label)):
         return False
     return _risk_similarity(representative, candidate) >= 0.88
+
+
+def _should_hide_group(group: dict[str, object], all_groups: list[dict[str, object]]) -> bool:
+    unit_label = str(group.get("raw_unit_label") or "")
+    rule_code = _normalize_rule_code(str(group.get("rule_id") or ""))
+    if unit_label != "不确定审查对象" or rule_code != "R3":
+        return False
+    return any(
+        _normalize_rule_code(str(other.get("rule_id") or "")) == "R3"
+        and str(other.get("raw_unit_label") or "") != "不确定审查对象"
+        for other in all_groups
+    )
 
 
 def group_risks(
@@ -111,17 +159,39 @@ def group_risks(
         representative = bucket["representative"]
         merged_risks = list(bucket["risks"])
         merged_evidences = list(bucket["evidences"])
+        clause = repository.get_clause(representative.clause_id)
+        chapter_title = (
+            str(getattr(clause, "chapter_title", "")).strip()
+            or extract_chapter_title(representative.location_label)
+        )
+        clause_type = (
+            str(getattr(clause, "clause_type", "")).strip()
+            or extract_clause_type(representative.review_reasoning)
+        )
+        raw_unit_label = (
+            str(getattr(clause, "unit_label", "")).strip()
+            or extract_unit_label(representative.review_reasoning)
+            or "未标注"
+        )
+        unit_name = str(getattr(clause, "unit_name", "")).strip()
+        unit_label = _format_unit_display(unit_label=raw_unit_label, unit_name=unit_name)
+        location_label = (
+            str(getattr(clause, "location_label", "")).strip()
+            or str(representative.location_label)
+        )
         groups.append(
             {
                 "risk_id": representative.risk_id,
                 "risk_title": representative.risk_title,
                 "risk_level": representative.risk_level,
                 "rule_id": representative.rule_id,
+                "rule_code": _normalize_rule_code(representative.rule_id),
                 "rule_domain": representative.rule_domain,
-                "location_label": representative.location_label,
-                "chapter_title": extract_chapter_title(representative.location_label),
-                "clause_type": extract_clause_type(representative.review_reasoning),
-                "unit_label": extract_unit_label(representative.review_reasoning),
+                "location_label": _normalize_location_label(location_label),
+                "chapter_title": chapter_title,
+                "clause_type": clause_type,
+                "unit_label": unit_label,
+                "raw_unit_label": raw_unit_label,
                 "risk_description": merge_texts(
                     [str(item.risk_description) for item in merged_risks],
                     fallback=str(representative.risk_description),
@@ -143,9 +213,15 @@ def group_risks(
                 "created_at": representative.created_at,
             }
         )
+    visible_groups = [group for group in groups if not _should_hide_group(group, groups)]
     return sorted(
-        groups,
-        key=lambda item: (SEVERITY_ORDER.get(str(item["risk_level"]), 9), str(item["created_at"])),
+        visible_groups,
+        key=lambda item: (
+            SEVERITY_ORDER.get(str(item["risk_level"]), 9),
+            str(item["risk_title"]),
+            str(item["chapter_title"]),
+            str(item["created_at"]),
+        ),
     )
 
 
@@ -167,6 +243,7 @@ def build_top_risk_payload(risk_group: dict[str, object]) -> dict[str, object]:
         "risk_id": risk_group["risk_id"],
         "risk_title": risk_group["risk_title"],
         "risk_level": risk_group["risk_level"],
+        "rule_code": risk_group["rule_code"],
         "location_label": risk_group["location_label"],
         "chapter_title": risk_group["chapter_title"],
         "clause_type": risk_group["clause_type"],

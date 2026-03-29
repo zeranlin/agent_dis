@@ -96,6 +96,13 @@ class JsonRepository:
         ]
         return sorted(clause_records, key=lambda item: item.clause_order)
 
+    def get_clause(self, clause_id: str) -> ClauseRecord | None:
+        clauses = self._read_json(self.clauses_path)
+        payload = clauses.get(clause_id)
+        if payload is None:
+            return None
+        return ClauseRecord(**payload)
+
     def save_risk(self, risk: RiskItemRecord) -> None:
         self._update_json_mapping(self.risks_path, risk.risk_id, risk.to_dict())
 

@@ -87,9 +87,9 @@ class ResultAggregator:
 
 def build_overall_conclusion(*, risk_count_high: int, risk_count_medium: int, risk_count_low: int) -> str:
     if risk_count_high > 0:
-        return f"本文件归并后存在 {risk_count_high} 组高风险问题，建议优先复核资格条件、评分规则或定向限制条款。"
+        return f"本文件归并后存在 {risk_count_high} 组高风险问题和 {risk_count_medium} 组中风险问题，建议优先复核品牌指向、合同责任失衡和资格门槛偏严条款。"
     if risk_count_medium > 0:
-        return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，建议进一步人工复核。"
+        return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，建议优先复核资格门槛、评分条款和商务要求。"
     if risk_count_low > 0:
         return f"本文件未发现高风险或中风险问题，当前归并后仅识别到 {risk_count_low} 组低风险提示。"
     return "当前最小审查链路未识别到明显风险，建议结合人工复核继续确认。"
@@ -125,6 +125,20 @@ def build_report_markdown(
     overall_conclusion: str,
     risk_groups: list[dict[str, object]],
 ) -> str:
+    focus_summary = "、".join(
+        title
+        for title in []
+    )
+    if risk_groups:
+        focus_titles: list[str] = []
+        for risk_group in risk_groups:
+            title = str(risk_group["risk_title"])
+            if title and title not in focus_titles:
+                focus_titles.append(title)
+            if len(focus_titles) >= 3:
+                break
+        focus_summary = "、".join(focus_titles)
+
     lines = [
         "# 审查报告",
         "",
@@ -141,6 +155,7 @@ def build_report_markdown(
         "- 本报告基于当前 V1 最小规则包和解析结果自动生成。",
         "- 风险结论仅用于辅助审核，不直接替代人工定性。",
         "- 当前风险明细按同条款同规则做轻量归并后展示，更接近人工复核视角。",
+        f"- 当前优先关注：{focus_summary or '无'}。",
         "",
         "## 风险组明细",
         "",
@@ -161,6 +176,7 @@ def build_report_markdown(
                 "",
                 f"- 风险标题：{risk_group['risk_title']}",
                 f"- 风险级别：{risk_group['risk_level']}",
+                f"- 规则编号：{risk_group['rule_code']}",
                 f"- 规则域：{risk_group['rule_domain']}",
                 f"- 章节上下文：{risk_group['chapter_title'] or '无'}",
                 f"- 业务单元：{risk_group['unit_label'] or '未标注'}",
