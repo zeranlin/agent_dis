@@ -138,6 +138,182 @@
 5. 规则对象
 6. 任务指令对象
 
+#### 5.1.1 任务对象字段约束
+
+任务对象建议收成 `5` 个核心字段和 `3` 个运行约束字段。
+
+核心字段：
+
+1. `task_id`
+2. `project_id`
+3. `document_id`
+4. `file_name`
+5. `review_batch_id`
+
+运行约束字段：
+
+1. `batch_index`
+2. `batch_count`
+3. `batch_scope`
+
+字段级原则：
+
+1. 核心标识字段创建后不可变
+2. 同一任务必须可追溯到项目、文件和批次
+3. 必须支持单批失败后的精确重跑
+4. 必须支持后续风险归并与结果汇总按任务统一聚合
+
+收口句：
+
+`任务对象负责定义“这是谁的任务、审哪份文件、当前是第几批、这一批覆盖哪里”。`
+
+#### 5.1.2 文件对象字段约束
+
+文件对象建议收成 `4` 个基础字段和 `4` 个审查上下文字段。
+
+基础字段：
+
+1. `document_id`
+2. `document_type`
+3. `document_format`
+4. `source_name`
+
+审查上下文字段：
+
+1. `review_scope`
+2. `document_summary`
+3. `chapter_catalog`
+4. `token_estimate`
+
+字段级原则：
+
+1. 文件信息必须真实来源于上传文件
+2. 重点服务解析、批处理和追溯，不只服务页面展示
+3. 文件对象不直接承载条款级风险判断
+4. 后续风险、证据和结论都必须能反查到原始文件
+
+收口句：
+
+`文件对象负责定义“当前审的是哪份文件、是什么格式、处于什么业务审查范围、能够提供哪些文件级上下文”。`
+
+#### 5.1.3 结构片段对象字段约束
+
+结构片段对象是 `LLM` 主审查输入单位，建议收成 `5` 个核心字段和 `4` 个定位与上下文字段。
+
+核心字段：
+
+1. `fragment_id`
+2. `fragment_type`
+3. `fragment_text`
+4. `chapter_title`
+5. `location_label`
+
+定位与上下文字段：
+
+1. `order_index`
+2. `clause_type`
+3. `parent_section_path`
+4. `token_estimate`
+
+字段级原则：
+
+1. 必须可直接送审
+2. 必须可定位原文
+3. 必须保留原文关键表述
+4. 必须可排序切批
+5. 必须可挂接章节与相邻上下文
+
+收口句：
+
+`结构片段对象是 LLM 审查的最小主输入单位，必须同时满足可送审、可定位、可排序和可补上下文。`
+
+#### 5.1.4 上下文对象字段约束
+
+上下文对象建议收成 `4` 个主上下文字段和 `3` 个控制字段。
+
+主上下文字段：
+
+1. `previous_fragments`
+2. `next_fragments`
+3. `chapter_summary`
+4. `section_path`
+
+控制字段：
+
+1. `context_window_size`
+2. `context_truncation_flag`
+3. `context_source`
+
+字段级原则：
+
+1. 只做辅助，不替代当前片段原文
+2. 局部优先，不做全文件长上下文
+3. 上下文规模必须可控
+4. 上下文来源必须可追溯
+
+收口句：
+
+`上下文对象只负责给当前片段补局部理解环境，不能替代当前片段原文。`
+
+#### 5.1.5 规则对象字段约束
+
+规则对象建议收成 `6` 个核心字段和 `4` 个增强字段。
+
+核心字段：
+
+1. `rule_id`
+2. `rule_code`
+3. `rule_name`
+4. `rule_domain`
+5. `execution_level`
+6. `risk_level`
+
+增强字段：
+
+1. `rule_definition`
+2. `rule_examples`
+3. `rule_boundary`
+4. `version`
+
+字段级原则：
+
+1. 必须可直接进入 `LLM` 输入
+2. 必须同时服务模型理解和人工展示
+3. 必须支持后续章节级规则预筛
+4. 必须支持规则版本追溯
+
+收口句：
+
+`规则对象负责定义“查什么、按什么级别查、命中后按什么风险解释”。`
+
+#### 5.1.6 任务指令对象字段约束
+
+任务指令对象建议收成 `4` 个核心字段和 `3` 个约束字段。
+
+核心字段：
+
+1. `system_instruction`
+2. `output_schema`
+3. `evidence_requirement`
+4. `reasoning_requirement`
+
+约束字段：
+
+1. `conservative_policy`
+2. `json_only`
+3. `instruction_version`
+
+字段级原则：
+
+1. 只定义模型行为护栏，不承载业务事实
+2. 必须稳定且版本化
+3. 必须直接约束输出结构
+4. 必须让模型在证据不足时保持保守
+
+收口句：
+
+`任务指令对象定义“模型该怎么审、该怎么输出、证据和理由必须怎么给”。`
+
 ### 5.2 输入字段
 
 #### 1. 任务对象
@@ -206,6 +382,111 @@
 | `conservative_policy` | 证据不足时应保持保守 |
 | `json_only` | 是否只允许输出 `JSON` |
 
+#### 5.2.1 必须字段
+
+V1 必须字段建议只保留“没有它就无法稳定执行审查”的字段，分为四组：
+
+任务与文件标识字段：
+
+1. `task_id`
+2. `document_id`
+3. `review_batch_id`
+4. `file_name`
+5. `document_format`
+
+主审查片段字段：
+
+1. `fragment_id`
+2. `fragment_type`
+3. `fragment_text`
+4. `chapter_title`
+5. `location_label`
+
+规则字段：
+
+1. `rule_id`
+2. `rule_code`
+3. `rule_name`
+4. `rule_domain`
+5. `execution_level`
+6. `risk_level`
+7. `rule_definition`
+
+指令字段：
+
+1. `system_instruction`
+2. `output_schema`
+3. `evidence_requirement`
+4. `reasoning_requirement`
+5. `json_only`
+
+收口句：
+
+`必须字段 = 标识任务与文件、能直接审片段、能直接读规则、能直接约束模型输出。`
+
+#### 5.2.2 增强字段
+
+增强字段用于提升模型理解稳定性和后续系统编排能力，建议包括：
+
+文件级增强字段：
+
+1. `review_scope`
+2. `document_summary`
+3. `chapter_catalog`
+4. `token_estimate`
+
+片段级增强字段：
+
+1. `clause_type`
+2. `order_index`
+3. `parent_section_path`
+
+上下文增强字段：
+
+1. `previous_fragments`
+2. `next_fragments`
+3. `chapter_summary`
+4. `section_path`
+5. `related_fragments`
+6. `context_window_size`
+7. `context_truncation_flag`
+8. `context_source`
+
+规则增强字段：
+
+1. `rule_examples`
+2. `rule_boundary`
+3. `version`
+
+指令增强字段：
+
+1. `conservative_policy`
+2. `instruction_version`
+
+收口句：
+
+`增强字段 = 提升模型理解稳定性、降低误判率、支撑批处理和追溯。`
+
+#### 5.2.3 字段分层原则
+
+输入字段建议固定成 `三层分层原则`：
+
+第一层：必跑层
+
+- 缺少该层字段则不应执行 `LLM` 审查
+
+第二层：增强层
+
+- 缺少该层字段仍可执行，但准确率和稳定性下降
+
+第三层：控制层
+
+- 不直接参与业务判断，但直接影响批处理、上下文预算、重试和排障
+
+收口句：
+
+`输入字段不追求越多越好，而是先保证可执行，再逐步增强精度与稳定性。`
+
 ### 5.3 输入批次结构
 
 一次 `LLM` 调用建议固定为：
@@ -247,6 +528,87 @@
 - 同一批只放连续片段
 - 同一批共享候选规则与固定任务指令
 
+#### 5.3.1 批次对象结构
+
+建议一次 `LLM` 输入批次固定成：
+
+1. 批次主对象
+2. 文件上下文子对象
+3. 片段列表子对象
+4. 规则列表子对象
+5. 指令子对象
+
+批次主对象建议至少包含：
+
+- `task_id`
+- `project_id`
+- `document_id`
+- `review_batch_id`
+- `batch_index`
+- `batch_scope`
+
+收口句：
+
+`批次对象本身负责标识与控制，具体业务内容分到文件上下文、片段列表、规则列表和指令对象中。`
+
+#### 5.3.2 片段列表组织结构
+
+片段列表建议采用有序数组，且每个片段对象至少包含：
+
+- `fragment_id`
+- `fragment_type`
+- `chapter_title`
+- `location_label`
+- `fragment_text`
+- `order_index`
+- `clause_type`
+
+组织原则：
+
+1. 按 `order_index` 升序
+2. 片段必须连续
+3. 同章优先
+4. 默认每批 `3` 个片段，最多 `5` 个
+5. 正文优先，章节标题不作为主审查片段
+
+收口句：
+
+`片段列表必须是有序、连续、同章优先的小批量正文片段集合。`
+
+#### 5.3.3 共享规则与指令结构
+
+建议采用：
+
+- 批次共享规则
+- 批次共享指令
+
+共享规则建议字段：
+
+- `rule_id`
+- `rule_code`
+- `rule_name`
+- `rule_domain`
+- `execution_level`
+- `risk_level`
+- `rule_definition`
+- `rule_examples`
+- `rule_boundary`
+- `version`
+
+共享指令建议字段：
+
+- `system_instruction`
+- `output_schema`
+- `evidence_requirement`
+- `reasoning_requirement`
+- `conservative_policy`
+- `json_only`
+- `instruction_version`
+
+收口句：
+
+`规则和指令必须批次共享，这样才能减少 token 浪费并提升输出稳定性。`
+
 ## 6. LLM 审查输出模型
 
 ### 6.1 输出对象
@@ -258,6 +620,66 @@
 3. 风险结果对象
 4. 证据对象
 5. 审查说明对象
+
+#### 6.1.1 批次输出对象
+
+批次输出对象用于回答“这一批是否成功返回可用结果”，建议字段包括：
+
+- `task_id`
+- `review_batch_id`
+- `batch_index`
+- `output_status`
+- `error_message`
+- `model_name`
+- `finished_at`
+
+#### 6.1.2 片段审查结果对象
+
+片段审查结果对象用于回答“这个片段是否命中、是否需要人工确认”，建议字段包括：
+
+- `fragment_id`
+- `fragment_type`
+- `location_label`
+- `review_status`
+- `risk_count`
+- `need_human_confirm`
+
+#### 6.1.3 风险结果对象
+
+风险结果对象用于回答“命中了什么规则、是什么风险、后续如何归并”，建议字段包括：
+
+- `rule_id`
+- `rule_code`
+- `rule_name`
+- `hit`
+- `risk_title`
+- `risk_level`
+- `execution_level`
+- `risk_description`
+- `risk_category`
+- `merge_key`
+- `duplicate_flag`
+
+#### 6.1.4 证据对象
+
+证据对象用于回答“为什么说这里有问题”，建议字段包括：
+
+- `evidence_text`
+- `evidence_location`
+- `evidence_note`
+- `evidence_source_type`
+- `evidence_fragment_id`
+
+#### 6.1.5 审查说明对象
+
+审查说明对象用于回答“为什么命中、把握有多大、哪里仍不确定”，建议字段包括：
+
+- `review_reasoning`
+- `confidence`
+- `need_human_confirm`
+- `uncertainty_note`
+- `boundary_note`
+- `decision_basis`
 
 ### 6.2 输出字段
 
@@ -321,6 +743,106 @@
 | `boundary_note` | 适用边界说明 |
 | `decision_basis` | 判断依据摘要 |
 
+#### 6.2.1 必须字段
+
+输出必须字段建议分为五组：
+
+批次级必须字段：
+
+1. `task_id`
+2. `review_batch_id`
+3. `batch_index`
+4. `output_status`
+
+片段级必须字段：
+
+1. `fragment_id`
+2. `location_label`
+3. `review_status`
+
+风险级必须字段：
+
+1. `rule_id`
+2. `rule_code`
+3. `rule_name`
+4. `hit`
+5. `risk_title`
+6. `risk_level`
+7. `risk_description`
+
+证据级必须字段：
+
+1. `evidence_text`
+2. `evidence_location`
+
+说明级必须字段：
+
+1. `review_reasoning`
+2. `need_human_confirm`
+
+收口句：
+
+`必须字段 = 批次状态 + 片段定位 + 风险识别 + 原文证据 + 审查理由。`
+
+#### 6.2.2 增强字段
+
+增强字段用于提升归并、排序、追溯和人工复核体验，建议包括：
+
+批次级增强字段：
+
+1. `error_message`
+2. `model_name`
+3. `finished_at`
+
+片段级增强字段：
+
+1. `fragment_type`
+2. `risk_count`
+
+风险级增强字段：
+
+1. `execution_level`
+2. `risk_category`
+3. `merge_key`
+4. `duplicate_flag`
+
+证据级增强字段：
+
+1. `evidence_note`
+2. `evidence_source_type`
+3. `evidence_fragment_id`
+
+说明级增强字段：
+
+1. `confidence`
+2. `uncertainty_note`
+3. `boundary_note`
+4. `decision_basis`
+
+收口句：
+
+`增强字段 = 让结果更适合归并、排序、追溯和人工复核。`
+
+#### 6.2.3 字段分层原则
+
+输出字段建议固定成三层：
+
+第一层：入库必需层
+
+- 没有这些字段，这条结果不应进入主链路
+
+第二层：归并增强层
+
+- 没有这些字段也能入库，但归并效果会下降
+
+第三层：人工解释层
+
+- 没有这些字段也能生成结果，但人工查看体验会变差
+
+收口句：
+
+`输出字段必须先保证系统能接，再增强系统能归并，最后增强人工能理解。`
+
 ### 6.3 输出批次结构
 
 一次调用的整体输出建议固定成：
@@ -336,6 +858,69 @@
 - 不允许混入解释性自然语言前后缀
 - 每个命中项必须带 `evidence` 和 `reasoning`
 - 即使没有命中，也应返回 `fragment_results`
+
+#### 6.3.1 批次结果层
+
+批次结果层建议至少包含：
+
+- `task_id`
+- `review_batch_id`
+- `batch_index`
+- `output_status`
+- `error_message`
+
+作用：
+
+- 先判断这一批能不能进入后续主链路
+
+#### 6.3.2 片段结果层
+
+片段结果层建议通过 `fragment_results` 承载，每个元素至少包含：
+
+- `fragment_id`
+- `fragment_type`
+- `location_label`
+- `review_status`
+- `risk_count`
+- `need_human_confirm`
+
+作用：
+
+- 让系统知道每个片段各自的审查状态
+
+#### 6.3.3 风险结果层
+
+风险结果层建议通过 `risk_items` 承载，每个元素应包含：
+
+- 风险字段
+- 证据对象
+- 审查说明对象
+
+作用：
+
+- 作为后续风险归并、报告生成和结果排序的主输入
+
+#### 6.3.4 元信息层
+
+元信息层建议通过 `meta` 承载，至少包含：
+
+- `model_name`
+- `json_valid`
+- `schema_version`
+
+作用：
+
+- 支撑排障、追溯和版本管理
+
+#### 6.3.5 输出批次约束
+
+建议固定以下约束：
+
+1. 必须输出合法 `JSON`
+2. 不允许带前后解释性自然语言
+3. 每个 `risk_item` 必须绑定 `fragment_id`
+4. 每个命中项必须带 `evidence` 和 `reasoning`
+5. 即使无命中，也必须返回 `fragment_results`
 
 ## 7. 分片审查与批处理策略
 
@@ -353,11 +938,112 @@
 - `条款片段` 是主审查单位
 - `段落片段` 是补充审查单位
 
+#### 7.1.1 章节
+
+章节对象只负责提供上下文，主要承担：
+
+- `chapter_title`
+- 章节摘要
+- 章节路径
+
+约束：
+
+1. 不直接作为主审查单元
+2. 必须能稳定挂接到条款片段或段落片段
+3. 必须支持同章节批处理
+
+#### 7.1.2 条款片段
+
+条款片段是 V1 主审查单位，适用于：
+
+- 有明确编号
+- 有明确位置
+- 有完整语义单元
+
+约束：
+
+1. 条款编号优先
+2. 保留条款标题和紧随正文
+3. 必须能直接引用原文
+
+#### 7.1.3 段落片段
+
+段落片段用于补足没有明确条款编号但正文独立完整的区域。
+
+约束：
+
+1. 必须是完整自然段
+2. 不应把多个独立要求混成一个片段
+3. 必须能定位回原文位置
+
+#### 7.1.4 分片优先级
+
+建议固定优先级：
+
+1. `条款片段`
+2. `段落片段`
+3. `章节仅上下文`
+
+收口句：
+
+`章节负责上下文，条款片段优先主审，段落片段负责补充覆盖。`
+
 ### 7.2 批次组织方式
 
 批次组织建议采用：
 
 `同章节 + 连续片段 + 小窗口 + 规则预筛`
+
+#### 7.2.1 同章节组织
+
+建议一批尽量只放同一章节的片段。
+
+原因：
+
+1. 章节语义更一致
+2. 规则预筛更稳定
+3. 模型不易分散注意力
+
+#### 7.2.2 连续片段组织
+
+建议同一批必须由相邻片段组成。
+
+原因：
+
+1. 相邻条款常有补充关系
+2. 远距离片段混装会放大误判风险
+
+#### 7.2.3 小窗口组织
+
+建议：
+
+1. 默认 `3` 个片段一批
+2. 最多 `5` 个片段一批
+3. 超长片段可降到 `1-2` 个
+
+#### 7.2.4 规则预筛组织
+
+建议先按章节模块预筛候选规则，再送 `LLM`。
+
+例如：
+
+- 资格要求章节优先资格与公平竞争类规则
+- 评分办法章节优先评审解释性规则
+- 采购需求章节优先需求合理性规则
+
+#### 7.2.5 批次形成顺序
+
+建议固定顺序：
+
+1. 按章节分组
+2. 章节内按顺序排序
+3. 连续窗口切批
+4. 为每批预筛规则
+5. 形成最终 `LLM` 输入批次
+
+收口句：
+
+`批次组织的关键不是多，而是同章、连续、小批、先筛规则。`
 
 具体口径：
 
@@ -371,6 +1057,72 @@
 `LLM` 调用策略建议采用：
 
 `串行小批次 + 批次级重试 + 失败批次局部降级`
+
+#### 7.3.1 调用策略
+
+建议：
+
+1. 默认按批次串行调用
+2. 一批成功后再处理下一批
+3. V1 不优先追求复杂并发
+
+原因：
+
+1. 当前环境吞吐有限
+2. 串行更稳、更容易排障
+3. 更适合早期高精度方案收口
+
+#### 7.3.2 重试策略
+
+建议每批最多：
+
+1. 首次调用 `1` 次
+2. 失败后重试 `2` 次
+3. 总计最多 `3` 次
+
+失败判定包括：
+
+1. HTTP 调用失败
+2. 请求超时
+3. 返回非 `JSON`
+4. `JSON` 结构缺字段
+5. 输出为空或不可解析
+
+#### 7.3.3 缩批策略
+
+建议：
+
+1. 第一次失败：原参数重试
+2. 第二次失败：缩小批次
+3. 例如从 `5` 个片段降到 `2-3` 个片段
+
+#### 7.3.4 局部失败策略
+
+建议：
+
+1. 某个批次失败，不直接把整份文件判死
+2. 成功批次结果先保留
+3. 失败批次记录失败原因
+4. 最终任务允许出现：
+   - `completed`
+   - `completed_with_partial_failure`
+   - `failed`
+
+#### 7.3.5 输出校验策略
+
+每次模型返回后，系统必须做三层校验：
+
+1. 协议校验
+2. 格式校验
+3. 结构校验
+
+只有全部通过，结果才进入后续归并。
+
+#### 7.3.6 V1 收口建议
+
+收口句：
+
+`V1 调用策略优先稳定，不优先吞吐，失败批次允许局部降级而不拖垮整任务。`
 
 建议规则：
 
