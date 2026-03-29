@@ -26,6 +26,7 @@ class LlmClientConfig:
     model: str
     timeout_seconds: float
     batch_size: int
+    rule_limit: int
     batch_char_budget: int
     clause_max_chars: int
     max_completion_tokens: int
@@ -50,9 +51,10 @@ def load_llm_config_from_env() -> LlmClientConfig:
         raise LlmConfigurationError(f"缺少 LLM 环境变量: {', '.join(missing)}")
 
     timeout_seconds = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "90"))
-    batch_size = max(1, int(os.environ.get("OPENAI_REVIEW_BATCH_SIZE", "8")))
-    clause_max_chars = max(200, int(os.environ.get("OPENAI_REVIEW_CLAUSE_MAX_CHARS", "1200")))
-    default_batch_char_budget = max(clause_max_chars, min(batch_size * clause_max_chars, 1400))
+    batch_size = max(1, int(os.environ.get("OPENAI_REVIEW_BATCH_SIZE", "4")))
+    rule_limit = max(3, int(os.environ.get("OPENAI_REVIEW_RULE_LIMIT", "6")))
+    clause_max_chars = max(200, int(os.environ.get("OPENAI_REVIEW_CLAUSE_MAX_CHARS", "800")))
+    default_batch_char_budget = max(clause_max_chars, min(batch_size * clause_max_chars, 1000))
     batch_char_budget = max(
         clause_max_chars,
         int(os.environ.get("OPENAI_REVIEW_BATCH_CHAR_BUDGET", str(default_batch_char_budget))),
@@ -72,6 +74,7 @@ def load_llm_config_from_env() -> LlmClientConfig:
         model=model,
         timeout_seconds=timeout_seconds,
         batch_size=batch_size,
+        rule_limit=rule_limit,
         batch_char_budget=batch_char_budget,
         clause_max_chars=clause_max_chars,
         max_completion_tokens=max_completion_tokens,
@@ -91,6 +94,10 @@ class OpenAiCompatibleLlmClient:
     @property
     def clause_max_chars(self) -> int:
         return self.config.clause_max_chars
+
+    @property
+    def rule_limit(self) -> int:
+        return self.config.rule_limit
 
     @property
     def batch_char_budget(self) -> int:

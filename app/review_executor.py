@@ -10,6 +10,7 @@ from app.repository import JsonRepository
 from app.review_assembler import ReviewInputAssembler
 
 MIN_RETRY_CLAUSE_MAX_CHARS = 300
+HIGH_PRIORITY_RULE_CODES = {"R1", "R3", "R5", "R9", "R12"}
 
 
 class ReviewExecutor:
@@ -54,10 +55,12 @@ class ReviewExecutor:
                 clause_max_chars=self.client.clause_max_chars,
                 batch_char_budget=self.client.batch_char_budget,
             ):
+                rule_limit = getattr(self.client, "rule_limit", len(runtime_input.rules))
                 findings = self._review_clause_batch(
                     runtime_input=runtime_input,
                     clause_batch=clause_batch,
                     clause_max_chars=self.client.clause_max_chars,
+                    rule_limit=rule_limit,
                 )
                 for finding in findings:
                     clause_id = str(finding.get("clause_id") or "").strip()
@@ -134,6 +137,7 @@ class ReviewExecutor:
         runtime_input: object,
         clause_batch: list[object],
         clause_max_chars: int,
+        rule_limit: int,
     ) -> list[dict[str, object]]:
         try:
             return self.client.review_batch(
@@ -142,6 +146,7 @@ class ReviewExecutor:
                     runtime_input=runtime_input,
                     clause_batch=clause_batch,
                     clause_max_chars=clause_max_chars,
+                    rule_limit=rule_limit,
                 ),
             )
         except LlmRequestError:
@@ -151,11 +156,13 @@ class ReviewExecutor:
                     runtime_input=runtime_input,
                     clause_batch=clause_batch[:midpoint],
                     clause_max_chars=clause_max_chars,
+                    rule_limit=rule_limit,
                 )
                 right_findings = self._review_clause_batch(
                     runtime_input=runtime_input,
                     clause_batch=clause_batch[midpoint:],
                     clause_max_chars=clause_max_chars,
+                    rule_limit=rule_limit,
                 )
                 return left_findings + right_findings
 
@@ -165,6 +172,7 @@ class ReviewExecutor:
                     runtime_input=runtime_input,
                     clause_batch=clause_batch,
                     clause_max_chars=next_clause_max_chars,
+                    rule_limit=rule_limit,
                 )
             raise
 
@@ -213,23 +221,28 @@ def _next_retry_clause_max_chars(clause_max_chars: int) -> int:
     return max(MIN_RETRY_CLAUSE_MAX_CHARS, clause_max_chars // 2)
 
 
-def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], clause_max_chars: int) -> dict[str, object]:
+def _build_batch_payload(
+    *,
+    runtime_input: object,
+    clause_batch: list[object],
+    clause_max_chars: int,
+    rule_limit: int,
+) -> dict[str, object]:
+    selected_rules = _select_rules_for_clause_batch(
+        rules=runtime_input.rules,
+        clause_batch=clause_batch,
+        rule_limit=rule_limit,
+    )
     return {
-        "task": {
-            "task_id": runtime_input.task_id,
-            "document_id": runtime_input.document_id,
-            "file_name": runtime_input.file_name,
-        },
         "rules": [
-            dict(rule)
-            for rule in runtime_input.rules
+            _build_rule_payload(rule)
+            for rule in selected_rules
         ],
         "clauses": [
             {
                 "clause_id": clause.clause_id,
                 "chapter_title": clause.chapter_title,
                 "clause_type": clause.clause_type,
-                "location_label": clause.location_label,
                 "clause_text": clause.clause_text[:clause_max_chars],
             }
             for clause in clause_batch
@@ -248,9 +261,8 @@ def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], c
             ],
         },
         "review_requirements": [
-            "严格参考规则对象中的命中定义、正例、反例和重点关注项。",
+            "只基于当前批次条款和给定规则做片段级判断。",
             "优先检查 R1、R3、R5、R9、R12 等高价值规则。",
-            "遇到同品牌、原厂保修、厂家认证讲师、执业医师证、评分量化不足等高价值表述时优先判断。",
             "仅在证据足以支撑时输出 findings。",
             "没有命中时返回 {\"findings\":[]}。",
             "risk_level 只能填写 高、中、低。",
@@ -259,6 +271,107 @@ def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], c
             "同一条款同一规则只输出一次，不要用近义理由重复输出。",
         ],
     }
+
+
+def _select_rules_for_clause_batch(
+    *,
+    rules: list[dict[str, object]],
+    clause_batch: list[object],
+    rule_limit: int,
+) -> list[dict[str, object]]:
+    if len(rules) <= rule_limit:
+        return list(rules)
+
+    batch_text = "\n".join(str(clause.clause_text) for clause in clause_batch)
+    selected: list[dict[str, object]] = []
+    selected_codes: set[str] = set()
+
+    for rule in rules:
+        rule_code = str(rule.get("rule_code") or "")
+        if rule_code in HIGH_PRIORITY_RULE_CODES:
+            selected.append(rule)
+            selected_codes.add(rule_code)
+
+    for rule in rules:
+        rule_code = str(rule.get("rule_code") or "")
+        if rule_code in selected_codes:
+            continue
+        if _rule_matches_batch_text(rule=rule, batch_text=batch_text):
+            selected.append(rule)
+            selected_codes.add(rule_code)
+        if len(selected) >= rule_limit:
+            return selected[:rule_limit]
+
+    for rule in rules:
+        rule_code = str(rule.get("rule_code") or "")
+        if rule_code in selected_codes:
+            continue
+        selected.append(rule)
+        selected_codes.add(rule_code)
+        if len(selected) >= rule_limit:
+            break
+
+    return selected[:rule_limit]
+
+
+def _rule_matches_batch_text(*, rule: dict[str, object], batch_text: str) -> bool:
+    normalized_text = _normalize_for_match(batch_text)
+    if not normalized_text:
+        return False
+
+    for candidate in _iter_rule_match_terms(rule):
+        normalized_candidate = _normalize_for_match(candidate)
+        if len(normalized_candidate) < 2:
+            continue
+        if normalized_candidate in normalized_text:
+            return True
+    return False
+
+
+def _iter_rule_match_terms(rule: dict[str, object]) -> list[str]:
+    terms: list[str] = []
+    for key in ("rule_name", "priority_hint", "hit_definition", "review_focus"):
+        value = rule.get(key)
+        if isinstance(value, str):
+            terms.extend(_split_match_terms(value))
+    for key in ("focus_terms", "positive_examples"):
+        value = rule.get(key)
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str):
+                    terms.extend(_split_match_terms(item))
+    return terms
+
+
+def _split_match_terms(text: str) -> list[str]:
+    normalized = str(text).replace("；", " ").replace("，", " ").replace("。", " ")
+    normalized = normalized.replace("、", " ").replace("/", " ").replace("（", " ").replace("）", " ")
+    normalized = normalized.replace("(", " ").replace(")", " ").replace("：", " ").replace(":", " ")
+    return [part.strip() for part in normalized.split() if part.strip()]
+
+
+def _normalize_for_match(text: str) -> str:
+    return "".join(str(text).lower().split())
+
+
+def _build_rule_payload(rule: dict[str, object]) -> dict[str, object]:
+    return {
+        "rule_code": rule.get("rule_code"),
+        "rule_name": rule.get("rule_name"),
+        "risk_level": rule.get("risk_level"),
+        "execution_level": rule.get("execution_level"),
+        "priority_hint": rule.get("priority_hint"),
+        "hit_definition": rule.get("hit_definition"),
+        "focus_terms": _trim_string_list(rule.get("focus_terms"), limit=6),
+        "positive_examples": _trim_string_list(rule.get("positive_examples"), limit=2),
+    }
+
+
+def _trim_string_list(value: object, *, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items = [str(item).strip() for item in value if str(item).strip()]
+    return items[:limit]
 
 
 def _normalize_text(value: object, *, fallback: str) -> str:

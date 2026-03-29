@@ -23,6 +23,7 @@ from app.review_executor import (
     _build_batch_payload,
     _chunk_clauses_for_review,
     _next_retry_clause_max_chars,
+    _select_rules_for_clause_batch,
 )
 from app.upload_service import UploadFile, UploadService
 from app.worker_runner import WorkerRunner
@@ -696,9 +697,6 @@ class ParseWorkerTestCase(unittest.TestCase):
 
     def test_build_batch_payload_keeps_rule_guidance_fields(self):
         class RuntimeInputStub:
-            task_id = "task_demo"
-            document_id = "document_demo"
-            file_name = "demo.docx"
             rules = [
                 {
                     "rule_code": "R5",
@@ -706,9 +704,11 @@ class ParseWorkerTestCase(unittest.TestCase):
                     "risk_level": "高",
                     "rule_domain": "公平竞争规则",
                     "execution_level": "自动判定",
+                    "priority_hint": "高价值规则",
                     "hit_definition": "直接要求同品牌或原厂时命中。",
-                    "positive_examples": ["提供同品牌主机。"],
+                    "positive_examples": ["提供同品牌主机。", "指定型号。", "超出条数的示例。"],
                     "negative_examples": ["说明可显示型号信息。"],
+                    "focus_terms": ["同品牌", "原厂", "型号", "专利", "配套", "兼容", "额外术语"],
                 }
             ]
 
@@ -727,12 +727,115 @@ class ParseWorkerTestCase(unittest.TestCase):
                 )
             ],
             clause_max_chars=200,
+            rule_limit=6,
         )
 
         self.assertEqual(payload["rules"][0]["rule_code"], "R5")
         self.assertIn("hit_definition", payload["rules"][0])
         self.assertIn("positive_examples", payload["rules"][0])
+        self.assertNotIn("negative_examples", payload["rules"][0])
+        self.assertEqual(len(payload["rules"][0]["positive_examples"]), 2)
+        self.assertEqual(len(payload["rules"][0]["focus_terms"]), 6)
+        self.assertNotIn("task", payload)
+        self.assertNotIn("location_label", payload["clauses"][0])
         self.assertIn("优先检查 R1、R3、R5、R9、R12", payload["review_requirements"][1])
+
+    def test_select_rules_for_clause_batch_prefers_matched_and_high_priority_rules(self):
+        rules = [
+            {
+                "rule_code": "R1",
+                "rule_name": "地域限制检查",
+                "risk_level": "高",
+                "execution_level": "自动判定",
+                "priority_hint": "高价值",
+                "hit_definition": "出现本地注册、本地办公时命中。",
+                "focus_terms": ["本地注册", "本地办公"],
+                "positive_examples": ["供应商须本地注册并在本地办公。"],
+            },
+            {
+                "rule_code": "R4",
+                "rule_name": "售后服务检查",
+                "risk_level": "中",
+                "execution_level": "辅助提示",
+                "priority_hint": "",
+                "hit_definition": "出现驻场服务要求时命中。",
+                "focus_terms": ["驻场服务"],
+                "positive_examples": ["供应商须提供驻场服务。"],
+            },
+            {
+                "rule_code": "R5",
+                "rule_name": "品牌型号指向检查",
+                "risk_level": "高",
+                "execution_level": "自动判定",
+                "priority_hint": "高价值",
+                "hit_definition": "出现品牌型号限制时命中。",
+                "focus_terms": ["品牌", "型号"],
+                "positive_examples": ["提供同品牌主机。"],
+            },
+            {
+                "rule_code": "R8",
+                "rule_name": "交付周期检查",
+                "risk_level": "低",
+                "execution_level": "辅助提示",
+                "priority_hint": "",
+                "hit_definition": "出现极短交付期时命中。",
+                "focus_terms": ["交付期"],
+                "positive_examples": ["7 天内交付。"],
+            },
+            {
+                "rule_code": "R9",
+                "rule_name": "评分项未量化检查",
+                "risk_level": "高",
+                "execution_level": "自动判定",
+                "priority_hint": "高价值",
+                "hit_definition": "出现综合评价、酌情打分时命中。",
+                "focus_terms": ["综合评价", "酌情打分"],
+                "positive_examples": ["采用综合评价并可酌情打分。"],
+            },
+            {
+                "rule_code": "R12",
+                "rule_name": "证书资质检查",
+                "risk_level": "高",
+                "execution_level": "自动判定",
+                "priority_hint": "高价值",
+                "hit_definition": "出现执业医师证等资质要求时命中。",
+                "focus_terms": ["执业医师证"],
+                "positive_examples": ["团队成员须具备执业医师证。"],
+            },
+            {
+                "rule_code": "R2",
+                "rule_name": "一般规则",
+                "risk_level": "中",
+                "execution_level": "辅助提示",
+                "priority_hint": "",
+                "hit_definition": "一般检查。",
+                "focus_terms": ["一般表述"],
+                "positive_examples": ["一般表述。"],
+            },
+        ]
+        clause_batch = [
+            build_clause_record(
+                clause_id="clause_demo",
+                document_id="document_demo",
+                chapter_id="chapter_demo",
+                chapter_title="第一章 资格要求",
+                clause_order=1,
+                clause_text="供应商须本地注册并在本地办公，且采用综合评价并可酌情打分。",
+                location_label="第一章 资格要求 / 1.1",
+                clause_type="条款片段",
+            )
+        ]
+
+        selected = _select_rules_for_clause_batch(
+            rules=rules,
+            clause_batch=clause_batch,
+            rule_limit=6,
+        )
+
+        self.assertEqual(len(selected), 6)
+        self.assertIn("R1", [rule["rule_code"] for rule in selected])
+        self.assertIn("R9", [rule["rule_code"] for rule in selected])
+        self.assertIn("R5", [rule["rule_code"] for rule in selected])
 
     def test_review_input_assembler_builds_runtime_input(self):
         root_dir = Path(__file__).resolve().parent.parent
