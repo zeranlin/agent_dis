@@ -22,6 +22,7 @@ from app.result_aggregator import build_overall_conclusion
 from app.review_executor import (
     ReviewExecutor,
     _build_batch_payload,
+    _build_heuristic_findings,
     _classify_clause_business_modules,
     _chunk_clauses_for_review,
     _normalize_finding_rule_code,
@@ -1358,24 +1359,23 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertIn("优先关注高价值风险规则", prompt.content_text)
 
     def test_build_batch_payload_keeps_rule_guidance_fields(self):
-        class RuntimeInputStub:
-            rules = [
-                {
-                    "rule_code": "R5",
-                    "rule_name": "品牌/型号指向检查",
-                    "risk_level": "高",
-                    "rule_domain": "公平竞争规则",
-                    "execution_level": "自动判定",
-                    "priority_hint": "高价值规则",
-                    "hit_definition": "直接要求同品牌或原厂时命中。",
-                    "positive_examples": ["提供同品牌主机。", "指定型号。", "超出条数的示例。"],
-                    "negative_examples": ["说明可显示型号信息。"],
-                    "focus_terms": ["同品牌", "原厂", "型号", "专利", "配套", "兼容", "额外术语"],
-                }
-            ]
+        selected_rules = [
+            {
+                "rule_code": "R5",
+                "rule_name": "品牌/型号指向检查",
+                "risk_level": "高",
+                "rule_domain": "公平竞争规则",
+                "execution_level": "自动判定",
+                "priority_hint": "高价值规则",
+                "hit_definition": "直接要求同品牌或原厂时命中。",
+                "positive_examples": ["提供同品牌主机。", "指定型号。", "超出条数的示例。"],
+                "negative_examples": ["说明可显示型号信息。"],
+                "focus_terms": ["同品牌", "原厂", "型号", "专利", "配套", "兼容", "额外术语"],
+            }
+        ]
 
         payload = _build_batch_payload(
-            runtime_input=RuntimeInputStub(),
+            selected_rules=selected_rules,
             clause_batch=[
                 build_clause_record(
                     clause_id="clause_demo",
@@ -1389,8 +1389,6 @@ class ParseWorkerTestCase(unittest.TestCase):
                 )
             ],
             clause_max_chars=200,
-            rule_limit=6,
-            rule_candidate_map={"R5": []},
         )
 
         self.assertEqual(payload["rules"][0]["rule_code"], "R5")
@@ -1944,6 +1942,121 @@ class ParseWorkerTestCase(unittest.TestCase):
         )
 
         self.assertEqual(normalized, "R9")
+
+    def test_build_heuristic_findings_detects_illegal_qualification_constraints(self):
+        qualification_clause = build_clause_record(
+            clause_id="qualification_clause",
+            document_id="d1",
+            chapter_id="ch1",
+            chapter_title="第一章 资格条件",
+            clause_order=1,
+            clause_text="投标人须提供高新技术企业证书，且成立满5年，并具有深圳市医疗器械行业同类项目业绩不少于2个。",
+            location_label="第一章 资格条件 / 1.1",
+            module_type="资格条件",
+            unit_type="条款",
+            unit_label="单条资格要求",
+            unit_name="投标人资格要求",
+            clause_type="条款片段",
+        )
+
+        findings = _build_heuristic_findings(
+            clause_batch=[qualification_clause],
+            selected_rules=[
+                {"rule_code": "R3"},
+                {"rule_code": "R4"},
+            ],
+        )
+
+        self.assertEqual({item["rule_code"] for item in findings}, {"R3", "R4"})
+        self.assertTrue(any("成立年限" in str(item["risk_title"]) or "无关资质" in str(item["risk_title"]) for item in findings))
+        self.assertTrue(any("区域或数量定向" in str(item["risk_title"]) for item in findings))
+
+    def test_build_heuristic_findings_detects_illegal_scoring_and_price_rules(self):
+        scoring_clause = build_clause_record(
+            clause_id="score_clause",
+            document_id="d1",
+            chapter_id="ch2",
+            chapter_title="第二章 评分办法",
+            clause_order=2,
+            clause_text="资产总额达到5000万元以上得6分；从业人员超过100人得4分。",
+            location_label="第二章 评分办法 / 2.1",
+            module_type="评分办法",
+            unit_type="评分项",
+            unit_label="商务分规则",
+            unit_name="企业实力",
+            clause_type="条款片段",
+        )
+        price_clause = build_clause_record(
+            clause_id="price_clause",
+            document_id="d1",
+            chapter_id="ch2",
+            chapter_title="第二章 评分办法",
+            clause_order=3,
+            clause_text="价格分采用评标基准价法，以所有有效投标报价的算术平均价作为评标基准价，最接近基准价者得满分。",
+            location_label="第二章 评分办法 / 2.2",
+            module_type="评分办法",
+            unit_type="评分项",
+            unit_label="价格分规则",
+            unit_name="价格分计算方法",
+            clause_type="条款片段",
+        )
+
+        findings = _build_heuristic_findings(
+            clause_batch=[scoring_clause, price_clause],
+            selected_rules=[{"rule_code": "R9"}],
+        )
+
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(any("规模财务指标" in str(item["risk_title"]) for item in findings))
+        self.assertTrue(any("低价优先原则" in str(item["risk_title"]) for item in findings))
+
+    def test_review_executor_persists_heuristic_findings_without_llm_hits(self):
+        class SilentClient:
+            max_clauses = 20
+            max_clauses_per_rule = 24
+            batch_size = 4
+            clause_max_chars = 800
+            batch_char_budget = 1000
+            rule_limit = 6
+
+            def review_batch(self, *, prompt_text: str, payload: dict[str, object]) -> list[dict[str, object]]:
+                return []
+
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir, fake_llm_environment():
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="规则补强样例.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 资格条件",
+                            "1.1 投标人资格要求",
+                            "投标人须提供高新技术企业证书，且成立满5年，并具有深圳市医疗器械行业同类项目业绩不少于2个。",
+                            "第二章 评分办法",
+                            "2.1 商务评分",
+                            "资产总额达到5000万元以上得6分；从业人员超过100人得4分。",
+                            "2.2 价格分",
+                            "价格分采用评标基准价法，以所有有效投标报价的算术平均价作为评标基准价，最接近基准价者得满分。",
+                        ]
+                    ),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+
+            executor = ReviewExecutor(repository, root_dir)
+            executor.client = SilentClient()
+
+            processed_count = executor.run_pending_jobs()
+
+            self.assertEqual(processed_count, 1)
+            risks = repository.list_risks_by_task(upload_response["task_id"])
+            self.assertGreaterEqual(len(risks), 3)
+            self.assertIn("rule_v1_r3", {risk.rule_id for risk in risks})
+            self.assertIn("rule_v1_r4", {risk.rule_id for risk in risks})
+            self.assertIn("rule_v1_r9", {risk.rule_id for risk in risks})
+            self.assertTrue(any("低价优先原则" in risk.risk_title for risk in risks))
 
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:

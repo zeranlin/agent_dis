@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -85,6 +86,30 @@ SCORING_SIGNAL_KEYWORDS = (
     "自由裁量",
     "裁量空间",
 )
+QUALIFICATION_UNIT_LABELS = {"单条资格要求", "单条业绩要求", "单条资质要求", "单条信用要求", "资格性审查表"}
+QUALIFICATION_CERT_OR_CREDIT_KEYWORDS = (
+    "高新技术企业",
+    "科技型中小企业",
+    "纳税信用a",
+    "纳税信用 a",
+    "信用等级a",
+    "信用等级 a",
+)
+QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS = (
+    "深圳市",
+    "本市",
+    "当地",
+    "同类项目业绩不少于",
+    "类似项目业绩不少于",
+    "业绩不少于",
+)
+SCORING_SCALE_KEYWORDS = ("资产总额", "从业人员", "纳税额", "营业收入")
+SCORING_SUBJECTIVE_KEYWORDS = ("优良中差", "综合评价", "酌情", "美观", "体验", "友好", "主观")
+SCORING_CERTIFICATE_KEYWORDS = ("许可证", "资格证", "证书", "认证", "测评师")
+PRICE_RULE_KEYWORDS = ("价格分", "报价得分", "价格评审", "评标基准价", "基准价", "平均价", "算术平均")
+YEAR_LIMIT_PATTERN = re.compile(r"(成立|设立|经营|注册).{0,8}(满|达到|不少于|超过)?\s*[0-9一二三四五六七八九十两]+\s*年")
+PERFORMANCE_COUNT_PATTERN = re.compile(r"(同类项目|类似项目|业绩|案例).{0,20}(不少于|至少|达到|满)\s*[0-9一二三四五六七八九十两]+\s*(个|项|份|家)")
+SCORING_CONTEXT_PATTERN = re.compile(r"(得\d+分|得分|满分|评分|分值)")
 
 
 class ReviewExecutor:
@@ -237,18 +262,29 @@ class ReviewExecutor:
         rule_limit: int,
         rule_candidate_map: dict[str, list[object]],
     ) -> list[dict[str, object]]:
+        selected_rules = _select_rules_for_clause_batch(
+            rules=runtime_input.rules,
+            clause_batch=clause_batch,
+            rule_limit=rule_limit,
+            rule_candidate_map=rule_candidate_map,
+        )
+        heuristic_findings = _build_heuristic_findings(
+            clause_batch=clause_batch,
+            selected_rules=selected_rules,
+        )
         try:
-            return self.client.review_batch(
+            llm_findings = self.client.review_batch(
                 prompt_text=runtime_input.prompt_text,
                 payload=_build_batch_payload(
-                    runtime_input=runtime_input,
+                    selected_rules=selected_rules,
                     clause_batch=clause_batch,
                     clause_max_chars=clause_max_chars,
-                    rule_limit=rule_limit,
-                    rule_candidate_map=rule_candidate_map,
                 ),
             )
+            return _dedupe_findings_by_clause_and_rule(heuristic_findings + llm_findings)
         except LlmRequestError:
+            if heuristic_findings and len(clause_batch) == 1:
+                return heuristic_findings
             if len(clause_batch) > 1:
                 midpoint = max(1, len(clause_batch) // 2)
                 left_findings = self._review_clause_batch(
@@ -325,18 +361,10 @@ def _next_retry_clause_max_chars(clause_max_chars: int) -> int:
 
 def _build_batch_payload(
     *,
-    runtime_input: object,
+    selected_rules: list[dict[str, object]],
     clause_batch: list[object],
     clause_max_chars: int,
-    rule_limit: int,
-    rule_candidate_map: dict[str, list[object]],
 ) -> dict[str, object]:
-    selected_rules = _select_rules_for_clause_batch(
-        rules=runtime_input.rules,
-        clause_batch=clause_batch,
-        rule_limit=rule_limit,
-        rule_candidate_map=rule_candidate_map,
-    )
     return {
         "rules": [
             _build_rule_payload(rule)
@@ -685,6 +713,236 @@ def _trim_string_list(value: object, *, limit: int) -> list[str]:
         return []
     items = [str(item).strip() for item in value if str(item).strip()]
     return items[:limit]
+
+
+def _build_heuristic_findings(
+    *,
+    clause_batch: list[object],
+    selected_rules: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    available_rule_codes = {str(rule.get("rule_code") or "").strip() for rule in selected_rules}
+    findings: list[dict[str, object]] = []
+    for clause in clause_batch:
+        findings.extend(_detect_qualification_gap_findings(clause=clause, available_rule_codes=available_rule_codes))
+        findings.extend(_detect_scoring_gap_findings(clause=clause, available_rule_codes=available_rule_codes))
+        findings.extend(_detect_price_rule_gap_findings(clause=clause, available_rule_codes=available_rule_codes))
+    return _dedupe_findings_by_clause_and_rule(findings)
+
+
+def _dedupe_findings_by_clause_and_rule(findings: list[dict[str, object]]) -> list[dict[str, object]]:
+    deduped: list[dict[str, object]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for finding in findings:
+        clause_id = str(finding.get("clause_id") or "").strip()
+        rule_code = str(finding.get("rule_code") or "").strip()
+        if not clause_id or not rule_code:
+            continue
+        key = (clause_id, rule_code)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(finding)
+    return deduped
+
+
+def _detect_qualification_gap_findings(
+    *,
+    clause: object,
+    available_rule_codes: set[str],
+) -> list[dict[str, object]]:
+    module_type = str(getattr(clause, "module_type", "")).strip()
+    unit_label = str(getattr(clause, "unit_label", "")).strip()
+    if module_type != "资格条件" and unit_label not in QUALIFICATION_UNIT_LABELS:
+        return []
+
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    summary_text = _normalize_for_match(
+        "\n".join(
+            [
+                str(getattr(clause, "chapter_title", "")),
+                str(getattr(clause, "unit_name", "")),
+                clause_text,
+            ]
+        )
+    )
+    findings: list[dict[str, object]] = []
+    if "R3" in available_rule_codes:
+        if any(keyword in summary_text for keyword in map(_normalize_for_match, QUALIFICATION_CERT_OR_CREDIT_KEYWORDS)):
+            findings.append(
+                _build_heuristic_finding(
+                    clause=clause,
+                    rule_code="R3",
+                    risk_title="资格条件设置无关资质或信用要求，存在违法限定风险",
+                    risk_level="高",
+                    risk_category="资格条件违法限定",
+                    review_reasoning="条款在资格条件中要求与项目直接履约关联不强的证书、企业认定或信用等级，存在不当设置准入门槛风险。",
+                    need_human_confirm=True,
+                )
+            )
+        elif YEAR_LIMIT_PATTERN.search(clause_text):
+            findings.append(
+                _build_heuristic_finding(
+                    clause=clause,
+                    rule_code="R3",
+                    risk_title="资格条件设置成立年限要求，存在违法限定风险",
+                    risk_level="高",
+                    risk_category="资格条件违法限定",
+                    review_reasoning="条款直接把成立或经营年限作为资格门槛，容易形成与项目履约能力不直接对应的不当限制。",
+                    need_human_confirm=True,
+                )
+            )
+
+    if "R4" in available_rule_codes:
+        region_matched = any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS)
+        if region_matched or PERFORMANCE_COUNT_PATTERN.search(clause_text):
+            findings.append(
+                _build_heuristic_finding(
+                    clause=clause,
+                    rule_code="R4",
+                    risk_title="资格业绩要求存在区域或数量定向风险",
+                    risk_level="高",
+                    risk_category="资格条件违法限定",
+                    review_reasoning="条款把特定区域、行业或业绩数量直接设为准入要求，可能缩小潜在供应商范围。",
+                    need_human_confirm=True,
+                )
+            )
+    return findings
+
+
+def _detect_scoring_gap_findings(
+    *,
+    clause: object,
+    available_rule_codes: set[str],
+) -> list[dict[str, object]]:
+    module_type = str(getattr(clause, "module_type", "")).strip()
+    unit_label = str(getattr(clause, "unit_label", "")).strip()
+    if module_type != "评分办法" and unit_label not in SCORING_UNIT_LABELS:
+        return []
+    if "R9" not in available_rule_codes:
+        return []
+
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    if not clause_text or not SCORING_CONTEXT_PATTERN.search(clause_text):
+        return []
+
+    normalized_text = _normalize_for_match(
+        "\n".join(
+            [
+                str(getattr(clause, "chapter_title", "")),
+                str(getattr(clause, "unit_name", "")),
+                clause_text,
+            ]
+        )
+    )
+    if any(keyword in normalized_text for keyword in map(_normalize_for_match, SCORING_SCALE_KEYWORDS)):
+        return [
+            _build_heuristic_finding(
+                clause=clause,
+                rule_code="R9",
+                risk_title="评分因素设置不当，存在以规模财务指标打分风险",
+                risk_level="高",
+                risk_category="评分因素合法性",
+                review_reasoning="条款把资产规模、人员数量或纳税等规模财务指标直接作为评分依据，存在评分因素设置不当风险。",
+                need_human_confirm=True,
+            )
+        ]
+    if "成立时间" in clause_text or YEAR_LIMIT_PATTERN.search(clause_text):
+        return [
+            _build_heuristic_finding(
+                clause=clause,
+                rule_code="R9",
+                risk_title="评分因素设置不当，存在以成立年限打分风险",
+                risk_level="高",
+                risk_category="评分因素合法性",
+                review_reasoning="条款把成立或经营年限直接转换为得分条件，存在将不宜评分内容纳入评审因素的风险。",
+                need_human_confirm=True,
+            )
+        ]
+    if any(keyword in clause_text for keyword in SCORING_CERTIFICATE_KEYWORDS):
+        return [
+            _build_heuristic_finding(
+                clause=clause,
+                rule_code="R9",
+                risk_title="评分因素设置不当，存在以无关证书资质打分风险",
+                risk_level="高",
+                risk_category="评分因素合法性",
+                review_reasoning="条款把许可证、认证或其他证书直接作为评分依据，存在与采购标的不直接相关的评分因素风险。",
+                need_human_confirm=True,
+            )
+        ]
+    if any(keyword in clause_text for keyword in SCORING_SUBJECTIVE_KEYWORDS):
+        return [
+            _build_heuristic_finding(
+                clause=clause,
+                rule_code="R9",
+                risk_title="评分标准量化不足，自由裁量空间较大",
+                risk_level="高",
+                risk_category="评分方法违法",
+                review_reasoning="条款包含主观评价或审美体验类表述，但缺少稳定量化标准，评审尺度可复核性较弱。",
+                need_human_confirm=True,
+            )
+        ]
+    return []
+
+
+def _detect_price_rule_gap_findings(
+    *,
+    clause: object,
+    available_rule_codes: set[str],
+) -> list[dict[str, object]]:
+    module_type = str(getattr(clause, "module_type", "")).strip()
+    unit_label = str(getattr(clause, "unit_label", "")).strip()
+    if "R9" not in available_rule_codes:
+        return []
+    if module_type != "评分办法" and unit_label != "价格分规则":
+        return []
+
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    summary_text = "\n".join(
+        [
+            str(getattr(clause, "chapter_title", "")),
+            str(getattr(clause, "unit_name", "")),
+            clause_text,
+        ]
+    )
+    if not any(keyword in summary_text for keyword in PRICE_RULE_KEYWORDS):
+        return []
+
+    if any(keyword in clause_text for keyword in ("平均价", "算术平均", "平均报价", "评标基准价", "基准价")):
+        return [
+            _build_heuristic_finding(
+                clause=clause,
+                rule_code="R9",
+                risk_title="价格分计算方法疑似不符合低价优先原则",
+                risk_level="高",
+                risk_category="价格分规则合法性",
+                review_reasoning="条款使用平均价、基准价或接近中间价的计分思路，需重点复核是否偏离综合评分法下的低价优先原则。",
+                need_human_confirm=True,
+            )
+        ]
+    return []
+
+
+def _build_heuristic_finding(
+    *,
+    clause: object,
+    rule_code: str,
+    risk_title: str,
+    risk_level: str,
+    risk_category: str,
+    review_reasoning: str,
+    need_human_confirm: bool,
+) -> dict[str, object]:
+    return {
+        "clause_id": str(getattr(clause, "clause_id", "")),
+        "rule_code": rule_code,
+        "risk_title": risk_title,
+        "risk_level": risk_level,
+        "risk_category": risk_category,
+        "evidence_text": str(getattr(clause, "clause_text", "")),
+        "review_reasoning": review_reasoning,
+        "need_human_confirm": need_human_confirm,
+    }
 
 
 def _normalize_text(value: object, *, fallback: str) -> str:
