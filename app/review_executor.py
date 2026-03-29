@@ -309,6 +309,8 @@ def _build_batch_payload(
         "clauses": [
             {
                 "clause_id": clause.clause_id,
+                "module_type": clause.module_type,
+                "unit_type": clause.unit_type,
                 "chapter_title": clause.chapter_title,
                 "clause_type": clause.clause_type,
                 "clause_text": clause.clause_text[:clause_max_chars],
@@ -443,6 +445,9 @@ def _score_clause_candidate(
 
 
 def _classify_clause_business_modules(clause: object) -> list[str]:
+    module_type = str(getattr(clause, "module_type", "")).strip()
+    if module_type and module_type != "其他":
+        return [module_type]
     chapter_title = str(getattr(clause, "chapter_title", ""))
     clause_text = str(getattr(clause, "clause_text", ""))
     combined_text = f"{chapter_title}\n{clause_text}"

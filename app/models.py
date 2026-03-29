@@ -117,11 +117,14 @@ class ClauseRecord:
     document_id: str
     chapter_id: str
     chapter_title: str
+    module_type: str
+    unit_type: str
     clause_type: str
     clause_order: int
     clause_text: str
     normalized_text: str
     location_label: str
+    parent_unit_id: str | None
     page_start: int
     page_end: int
 
@@ -327,6 +330,9 @@ def build_clause_record(
     clause_order: int,
     clause_text: str,
     location_label: str,
+    module_type: str = "其他",
+    unit_type: str = "条款",
+    parent_unit_id: str | None = None,
     clause_type: str = "未分类条款",
 ) -> ClauseRecord:
     return ClauseRecord(
@@ -334,11 +340,14 @@ def build_clause_record(
         document_id=document_id,
         chapter_id=chapter_id,
         chapter_title=chapter_title,
+        module_type=module_type,
+        unit_type=unit_type,
         clause_type=clause_type,
         clause_order=clause_order,
         clause_text=clause_text,
         normalized_text=" ".join(clause_text.split()),
         location_label=location_label,
+        parent_unit_id=parent_unit_id,
         page_start=1,
         page_end=1,
     )

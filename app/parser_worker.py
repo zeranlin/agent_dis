@@ -89,22 +89,37 @@ class ParseWorker:
                 chapter_payload["text_lines"].append(block.text)
                 chapter_title = str(chapter_payload["chapter_title"])
                 clause_type = "条款片段" if block.block_type == "clause" else "段落片段"
+                module_type = _classify_business_module(
+                    chapter_title=chapter_title,
+                    block_title=str(block.title),
+                    text=str(block.text),
+                )
                 clause_slices = _build_reviewable_clause_slices(block=block)
+                parent_unit_id = f"unit_{block.block_id}" if len(clause_slices) > 1 else None
                 for slice_index, clause_slice in enumerate(clause_slices, start=1):
                     normalized_text = _normalize_clause_text(clause_slice["text"])
                     if not normalized_text or normalized_text in seen_clause_texts:
                         continue
                     seen_clause_texts.add(normalized_text)
                     clause_count += 1
+                    unit_type = _classify_review_unit_type(
+                        module_type=module_type,
+                        clause_type=clause_type,
+                        chapter_title=chapter_title,
+                        text=clause_slice["text"],
+                    )
                     self.repository.save_clause(
                         build_clause_record(
                             clause_id=f"clause_{uuid4().hex[:12]}",
                             document_id=document.document_id,
                             chapter_id=parent_chapter_id,
                             chapter_title=chapter_title,
+                            module_type=module_type,
+                            unit_type=unit_type,
                             clause_order=(block.order_index * 100) + slice_index,
                             clause_text=clause_slice["text"],
                             location_label=f"{chapter_title} / {clause_slice['anchor']}",
+                            parent_unit_id=parent_unit_id,
                             clause_type=clause_type,
                         )
                     )
@@ -156,6 +171,17 @@ SHORT_ANCHOR_MAX_LEN = 48
 LONG_CLAUSE_THRESHOLD = 280
 LONG_SEGMENT_THRESHOLD = 90
 PIPE_SPLIT_PATTERN = re.compile(r"\s*\|\s*")
+BUSINESS_MODULE_KEYWORDS = {
+    "项目基础信息": ("项目名称", "项目编号", "采购人", "代理机构", "预算金额", "采购方式"),
+    "资格条件": ("资格", "资质", "证书", "业绩", "注册", "办公", "信用"),
+    "采购需求": ("采购需求", "技术", "参数", "规格", "性能", "配置", "功能", "服务要求", "交付"),
+    "评分办法": ("评分", "评审", "打分", "分值", "综合评价", "价格分", "商务分", "技术分"),
+    "合同条款": ("合同", "付款", "违约", "验收", "履约", "质保", "责任"),
+    "程序条款": ("投标", "开标", "评标", "定标", "废标", "澄清", "质疑", "投诉", "公告", "提交"),
+    "政策条款": ("中小企业", "绿色", "环保", "节能", "进口产品", "政策"),
+}
+TABLE_ROW_HINTS = ("|", "｜")
+DEVIATION_KEYWORDS = ("偏离", "偏差", "响应情况", "响应偏离")
 
 
 def _normalize_clause_text(text: str) -> str:
@@ -259,3 +285,43 @@ def _split_long_clause_text(text: str) -> list[str]:
             slices.append(unit)
 
     return slices or [normalized_text]
+
+
+def _classify_business_module(*, chapter_title: str, block_title: str, text: str) -> str:
+    best_module_type = "其他"
+    best_score = 0
+    for module_type, keywords in BUSINESS_MODULE_KEYWORDS.items():
+        score = 0
+        for keyword in keywords:
+            if keyword in chapter_title:
+                score += 3
+            if keyword in block_title:
+                score += 2
+            if keyword in text:
+                score += 1
+        if score > best_score:
+            best_module_type = module_type
+            best_score = score
+    return best_module_type
+
+
+def _classify_review_unit_type(*, module_type: str, clause_type: str, chapter_title: str, text: str) -> str:
+    normalized_text = str(text)
+    combined_text = f"{chapter_title}\n{normalized_text}"
+    if any(keyword in combined_text for keyword in DEVIATION_KEYWORDS):
+        return "偏离项"
+    if any(marker in normalized_text for marker in TABLE_ROW_HINTS):
+        if module_type == "评分办法":
+            return "评分项"
+        if module_type == "采购需求":
+            return "参数项"
+        return "表格行"
+    if module_type == "合同条款":
+        return "合同项"
+    if module_type == "采购需求":
+        return "参数项"
+    if module_type == "评分办法":
+        return "评分项"
+    if module_type in {"资格条件", "程序条款", "政策条款"}:
+        return "条款"
+    return "条款"

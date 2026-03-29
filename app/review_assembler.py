@@ -14,6 +14,8 @@ DEFAULT_OUTPUT_SCHEMA = {
         "rule_name",
         "risk_level",
         "execution_level",
+        "module_type",
+        "unit_type",
         "chapter_title",
         "clause_type",
         "location_label",
@@ -22,6 +24,8 @@ DEFAULT_OUTPUT_SCHEMA = {
     ],
     "evidence_item_fields": [
         "evidence_id",
+        "module_type",
+        "unit_type",
         "chapter_title",
         "clause_type",
         "quoted_text",

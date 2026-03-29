@@ -490,6 +490,32 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("资格项 | 供应商须本地注册", document.raw_text)
             self.assertEqual(document.raw_text.count("评分项 | 综合评价"), 1)
             self.assertEqual(document.raw_text.count("资格项 | 供应商须本地注册"), 1)
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_type == "参数项" for clause in clauses))
+            self.assertTrue(all(clause.module_type == "采购需求" for clause in clauses))
+
+    def test_parse_worker_classifies_score_table_rows_as_review_items(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_docx_with_table(
+                        ["第二章 评分办法", "2.1 评分标准"],
+                        [["评分项", "综合评价"], ["分值", "20 分"]],
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+
+            self.assertTrue(any(clause.module_type == "评分办法" for clause in clauses))
+            self.assertTrue(any(clause.unit_type == "评分项" for clause in clauses))
 
     def test_parse_worker_builds_chapter_text_and_location_label_for_review(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
@@ -520,11 +546,15 @@ class ParseWorkerTestCase(unittest.TestCase):
             clause_locations = [payload["location_label"] for payload in clauses.values()]
             clause_types = [payload["clause_type"] for payload in clauses.values()]
             clause_chapter_titles = [payload["chapter_title"] for payload in clauses.values()]
+            module_types = [payload["module_type"] for payload in clauses.values()]
+            unit_types = [payload["unit_type"] for payload in clauses.values()]
 
             self.assertTrue(any("供应商须具备独立承担民事责任的能力。" in text for text in chapter_texts))
             self.assertTrue(any(location.startswith("第一章 资格要求 / 1.1 供应商资格") for location in clause_locations))
             self.assertIn("条款片段", clause_types)
             self.assertTrue(all(title == "第一章 资格要求" for title in clause_chapter_titles))
+            self.assertTrue(all(module_type == "资格条件" for module_type in module_types))
+            self.assertTrue(all(unit_type == "条款" for unit_type in unit_types))
 
     def test_parse_worker_suppresses_exact_duplicate_clauses(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
@@ -581,6 +611,35 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertGreaterEqual(len(score_clauses), 2)
             self.assertTrue(any("片段2" in clause.location_label for clause in score_clauses))
             self.assertTrue(all(len(clause.location_label) < 80 for clause in score_clauses))
+            parent_unit_ids = {
+                clause.parent_unit_id
+                for clause in score_clauses
+                if clause.parent_unit_id is not None
+            }
+            self.assertEqual(len(parent_unit_ids), 1)
+
+    def test_parse_worker_classifies_deviation_rows_as_deviation_units(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_docx_with_table(
+                        ["第三章 采购需求偏离表", "3.1 技术偏离响应"],
+                        [["条款号", "参数要求", "响应情况"], ["1", "支持双机热备", "负偏离"]],
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+
+            self.assertTrue(any(clause.unit_type == "偏离项" for clause in clauses))
+            self.assertTrue(any(clause.module_type == "采购需求" for clause in clauses))
 
     def test_review_input_assembler_keeps_clause_type_and_chapter_context(self):
         root_dir = Path(__file__).resolve().parent.parent
@@ -609,6 +668,9 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertTrue(any(clause.chapter_title == "第一章 资格要求" for clause in runtime_input.clauses))
             self.assertTrue(any(clause.clause_type == "条款片段" for clause in runtime_input.clauses))
             self.assertTrue(any(clause.clause_type == "段落片段" for clause in runtime_input.clauses))
+            self.assertIn("module_type", runtime_input.output_schema["risk_item_fields"])
+            self.assertIn("unit_type", runtime_input.output_schema["risk_item_fields"])
+            self.assertTrue(any(clause.module_type == "资格条件" for clause in runtime_input.clauses))
 
     def test_parse_worker_extracts_text_from_doc(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
