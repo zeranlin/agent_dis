@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -217,9 +220,10 @@ class JsonRepository:
     def _update_json_mapping(self, path: Path, record_id: str, payload: dict[str, object]) -> None:
         lock = self._lock_for(path)
         with lock:
-            current_payload = self._read_json(path)
-            current_payload[record_id] = payload
-            self._write_json(path, current_payload)
+            with self._process_lock(path):
+                current_payload = self._read_json(path)
+                current_payload[record_id] = payload
+                self._write_json(path, current_payload)
 
     @classmethod
     def _lock_for(cls, path: Path) -> threading.Lock:
@@ -236,9 +240,23 @@ class JsonRepository:
 
     @staticmethod
     def _write_json(path: Path, payload: dict[str, object]) -> None:
-        temp_path = path.with_suffix(f"{path.suffix}.tmp")
+        temp_path = path.with_suffix(
+            f"{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
         temp_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
             encoding="utf-8",
         )
         temp_path.replace(path)
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _process_lock(path: Path):
+        lock_path = path.with_suffix(f"{path.suffix}.lock")
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("w", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)

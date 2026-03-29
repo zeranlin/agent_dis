@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 import tempfile
 import unittest
 import zipfile
@@ -8,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 from app.asset_loader import ReviewAssetLoader
-from app.models import build_risk_item_record
+from app.models import build_clause_record, build_risk_item_record
 from app.parser_worker import ParseWorker
 from app.result_aggregator import build_report_markdown
 from app.repository import JsonRepository
@@ -68,7 +69,48 @@ def build_minimal_pdf(text_lines: list[str]) -> bytes:
     )
 
 
+def save_clause_batch(runtime_dir: str, prefix: str, total: int) -> None:
+    repository = JsonRepository(Path(runtime_dir))
+    for index in range(total):
+        repository.save_clause(
+            build_clause_record(
+                clause_id=f"{prefix}_{index}",
+                document_id="document_shared",
+                chapter_id="chapter_shared",
+                chapter_title="第一章 测试章节",
+                clause_order=index + 1,
+                clause_text=f"测试条款 {prefix}-{index}",
+                location_label=f"第一章 测试章节 / {prefix}-{index}",
+                clause_type="条款片段",
+            )
+        )
+
+
 class ParseWorkerTestCase(unittest.TestCase):
+    def test_repository_keeps_json_valid_under_multi_process_clause_writes(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            process_context = multiprocessing.get_context("fork")
+            process_a = process_context.Process(
+                target=save_clause_batch,
+                args=(runtime_dir, "worker_a", 80),
+            )
+            process_b = process_context.Process(
+                target=save_clause_batch,
+                args=(runtime_dir, "worker_b", 80),
+            )
+
+            process_a.start()
+            process_b.start()
+            process_a.join(timeout=10)
+            process_b.join(timeout=10)
+
+            self.assertEqual(process_a.exitcode, 0)
+            self.assertEqual(process_b.exitcode, 0)
+
+            clauses_path = Path(runtime_dir) / "metadata" / "clauses.json"
+            clauses = json.loads(clauses_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(clauses), 160)
+
     def test_build_report_markdown_sorts_risks_by_severity_for_display(self):
         class EmptyEvidenceRepository:
             @staticmethod
