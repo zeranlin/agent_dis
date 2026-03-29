@@ -226,6 +226,7 @@
 ### 产品经理 P
 
 - 默认不介入主线推进，仅在需要时补业务口径
+- 已补一版默认规则包的产品讨论视角重排，便于按资格 / 商务 / 技术 / 评分 / 合同五类统一讨论规则范围
 
 ### 技术负责人 T
 
@@ -294,6 +295,7 @@
 - `docs/tech/v1/llm-v1-reduction-execution-round-1.md`
 - `docs/tech/v1/business-oriented-parsing-execution-round-1.md`
 - `docs/tech/v1/sample-risk-candidate-tuning-round-1.md`
+- `docs/business/v1/rule-pack-by-business-module.md`
 - `docs/tech/v1/sample-controlled-rerun-round-1.md`
 - `docs/tasks/archive/current-history-2026-03-30.md`
 
