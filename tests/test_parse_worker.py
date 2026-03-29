@@ -21,9 +21,11 @@ from app.review_assembler import ReviewInputAssembler
 from app.review_executor import (
     ReviewExecutor,
     _build_batch_payload,
+    _classify_clause_business_modules,
     _chunk_clauses_for_review,
     _next_retry_clause_max_chars,
     _select_candidate_clauses,
+    _select_rule_candidate_clause_map,
     _select_rules_for_clause_batch,
 )
 from app.upload_service import UploadFile, UploadService
@@ -729,6 +731,7 @@ class ParseWorkerTestCase(unittest.TestCase):
             ],
             clause_max_chars=200,
             rule_limit=6,
+            rule_candidate_map={"R5": []},
         )
 
         self.assertEqual(payload["rules"][0]["rule_code"], "R5")
@@ -740,6 +743,22 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertNotIn("task", payload)
         self.assertNotIn("location_label", payload["clauses"][0])
         self.assertIn("优先检查 R1、R3、R5、R9、R12", payload["review_requirements"][1])
+
+    def test_classify_clause_business_modules_uses_business_keywords(self):
+        clause = build_clause_record(
+            clause_id="clause_module",
+            document_id="document_demo",
+            chapter_id="chapter_demo",
+            chapter_title="第二章 评分办法",
+            clause_order=1,
+            clause_text="采用综合评价并可酌情打分。",
+            location_label="第二章 评分办法 / 2.1",
+            clause_type="条款片段",
+        )
+
+        modules = _classify_clause_business_modules(clause)
+
+        self.assertIn("评分办法", modules)
 
     def test_select_rules_for_clause_batch_prefers_matched_and_high_priority_rules(self):
         rules = [
@@ -831,12 +850,83 @@ class ParseWorkerTestCase(unittest.TestCase):
             rules=rules,
             clause_batch=clause_batch,
             rule_limit=6,
+            rule_candidate_map={
+                "R1": clause_batch,
+                "R4": clause_batch,
+                "R5": clause_batch,
+                "R8": [],
+                "R9": clause_batch,
+                "R12": [],
+                "R2": [],
+            },
         )
 
-        self.assertEqual(len(selected), 6)
+        self.assertEqual(len(selected), 4)
         self.assertIn("R1", [rule["rule_code"] for rule in selected])
         self.assertIn("R9", [rule["rule_code"] for rule in selected])
         self.assertIn("R5", [rule["rule_code"] for rule in selected])
+        self.assertIn("R4", [rule["rule_code"] for rule in selected])
+
+    def test_select_rule_candidate_clause_map_prefers_business_modules(self):
+        rules = [
+            {
+                "rule_code": "R3",
+                "rule_name": "资格条件过高检查",
+                "rule_domain": "合法性规则",
+                "hit_definition": "增设与项目无关资质时命中。",
+                "focus_terms": ["资质", "证书"],
+                "positive_examples": ["要求提供额外资质证书。"],
+            },
+            {
+                "rule_code": "R9",
+                "rule_name": "评分项未量化检查",
+                "rule_domain": "评审可解释性规则",
+                "hit_definition": "综合评价、酌情打分时命中。",
+                "focus_terms": ["综合评价", "酌情打分"],
+                "positive_examples": ["采用综合评价并可酌情打分。"],
+            },
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="c1",
+                document_id="d1",
+                chapter_id="ch1",
+                chapter_title="第一章 资格条件",
+                clause_order=1,
+                clause_text="要求提供额外资质证书。",
+                location_label="第一章 资格条件 / 1.1",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="c2",
+                document_id="d1",
+                chapter_id="ch2",
+                chapter_title="第二章 评分办法",
+                clause_order=2,
+                clause_text="采用综合评价并可酌情打分。",
+                location_label="第二章 评分办法 / 2.1",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="c3",
+                document_id="d1",
+                chapter_id="ch3",
+                chapter_title="第三章 其他说明",
+                clause_order=3,
+                clause_text="一般说明。",
+                location_label="第三章 其他说明 / 3.1",
+                clause_type="段落片段",
+            ),
+        ]
+
+        mapping = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in mapping["R3"]], ["c1"])
+        self.assertEqual([clause.clause_id for clause in mapping["R9"]], ["c2"])
 
     def test_select_candidate_clauses_prefers_high_value_sections_and_matches(self):
         rules = [
@@ -898,9 +988,16 @@ class ParseWorkerTestCase(unittest.TestCase):
             ),
         ]
 
+        rule_candidate_map = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
         selected = _select_candidate_clauses(
             clauses=clauses,
             rules=rules,
+            rule_candidate_map=rule_candidate_map,
             max_clauses=2,
         )
 
@@ -1015,6 +1112,7 @@ class ParseWorkerTestCase(unittest.TestCase):
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:
             max_clauses = 10
+            max_clauses_per_rule = 10
             batch_size = 4
             clause_max_chars = 800
             batch_char_budget = 1000

@@ -22,6 +22,38 @@ HIGH_VALUE_SECTION_KEYWORDS = (
     "合同",
     "服务",
 )
+BUSINESS_MODULE_KEYWORDS = {
+    "资格条件": ("资格", "资质", "供应商资格", "证书", "业绩", "注册", "办公"),
+    "采购需求": ("采购需求", "需求", "技术", "参数", "规格", "功能", "配置", "性能"),
+    "评分办法": ("评分", "评审", "打分", "分值", "商务分", "技术分", "价格分", "量化"),
+    "合同条款": ("合同", "付款", "违约", "验收", "履约", "质保"),
+    "程序条款": ("投标", "开标", "评标", "定标", "废标", "澄清", "质疑", "投诉", "公告", "程序"),
+    "政策条款": ("中小企业", "节能", "环保", "绿色", "进口产品", "政策"),
+}
+RULE_DOMAIN_MODULE_MAP = {
+    "合法性规则": ("资格条件", "程序条款", "评分办法", "合同条款"),
+    "公平竞争规则": ("资格条件", "采购需求", "评分办法"),
+    "需求合理性规则": ("采购需求", "合同条款"),
+    "评审可解释性规则": ("评分办法", "资格条件"),
+    "合同与履约风险规则": ("合同条款", "采购需求"),
+    "合同与程序风险规则": ("合同条款", "程序条款"),
+    "程序与公开规则": ("程序条款",),
+    "政策功能规则": ("政策条款", "采购需求", "评分办法"),
+}
+RULE_CODE_MODULE_MAP = {
+    "R1": ("资格条件", "程序条款"),
+    "R2": ("资格条件", "评分办法"),
+    "R3": ("资格条件",),
+    "R4": ("资格条件", "评分办法"),
+    "R5": ("采购需求", "资格条件"),
+    "R6": ("采购需求",),
+    "R7": ("采购需求", "合同条款"),
+    "R8": ("采购需求",),
+    "R9": ("评分办法",),
+    "R10": ("评分办法",),
+    "R11": ("评分办法", "资格条件"),
+    "R12": ("合同条款", "程序条款"),
+}
 
 
 class ReviewExecutor:
@@ -53,9 +85,15 @@ class ReviewExecutor:
                 str(rule["rule_code"]): rule
                 for rule in runtime_input.rules
             }
+            rule_candidate_map = _select_rule_candidate_clause_map(
+                rules=runtime_input.rules,
+                clauses=runtime_input.clauses,
+                max_clauses_per_rule=getattr(self.client, "max_clauses_per_rule", 24),
+            )
             candidate_clauses = _select_candidate_clauses(
                 clauses=runtime_input.clauses,
                 rules=runtime_input.rules,
+                rule_candidate_map=rule_candidate_map,
                 max_clauses=getattr(self.client, "max_clauses", len(runtime_input.clauses)),
             )
             clauses_by_id = {
@@ -77,6 +115,7 @@ class ReviewExecutor:
                     clause_batch=clause_batch,
                     clause_max_chars=self.client.clause_max_chars,
                     rule_limit=rule_limit,
+                    rule_candidate_map=rule_candidate_map,
                 )
                 for finding in findings:
                     clause_id = str(finding.get("clause_id") or "").strip()
@@ -160,6 +199,7 @@ class ReviewExecutor:
         clause_batch: list[object],
         clause_max_chars: int,
         rule_limit: int,
+        rule_candidate_map: dict[str, list[object]],
     ) -> list[dict[str, object]]:
         try:
             return self.client.review_batch(
@@ -169,6 +209,7 @@ class ReviewExecutor:
                     clause_batch=clause_batch,
                     clause_max_chars=clause_max_chars,
                     rule_limit=rule_limit,
+                    rule_candidate_map=rule_candidate_map,
                 ),
             )
         except LlmRequestError:
@@ -179,12 +220,14 @@ class ReviewExecutor:
                     clause_batch=clause_batch[:midpoint],
                     clause_max_chars=clause_max_chars,
                     rule_limit=rule_limit,
+                    rule_candidate_map=rule_candidate_map,
                 )
                 right_findings = self._review_clause_batch(
                     runtime_input=runtime_input,
                     clause_batch=clause_batch[midpoint:],
                     clause_max_chars=clause_max_chars,
                     rule_limit=rule_limit,
+                    rule_candidate_map=rule_candidate_map,
                 )
                 return left_findings + right_findings
 
@@ -195,6 +238,7 @@ class ReviewExecutor:
                     clause_batch=clause_batch,
                     clause_max_chars=next_clause_max_chars,
                     rule_limit=rule_limit,
+                    rule_candidate_map=rule_candidate_map,
                 )
             raise
 
@@ -249,11 +293,13 @@ def _build_batch_payload(
     clause_batch: list[object],
     clause_max_chars: int,
     rule_limit: int,
+    rule_candidate_map: dict[str, list[object]],
 ) -> dict[str, object]:
     selected_rules = _select_rules_for_clause_batch(
         rules=runtime_input.rules,
         clause_batch=clause_batch,
         rule_limit=rule_limit,
+        rule_candidate_map=rule_candidate_map,
     )
     return {
         "rules": [
@@ -295,18 +341,55 @@ def _build_batch_payload(
     }
 
 
+def _select_rule_candidate_clause_map(
+    *,
+    rules: list[dict[str, object]],
+    clauses: list[object],
+    max_clauses_per_rule: int,
+) -> dict[str, list[object]]:
+    rule_candidate_map: dict[str, list[object]] = {}
+    for rule in rules:
+        rule_code = str(rule.get("rule_code") or "")
+        if not rule_code:
+            continue
+        scored: list[tuple[int, int, object]] = []
+        preferred_modules = set(_preferred_modules_for_rule(rule))
+        for clause in clauses:
+            score = _score_rule_clause_match(
+                rule=rule,
+                clause=clause,
+                preferred_modules=preferred_modules,
+            )
+            if score <= 0:
+                continue
+            scored.append((score, int(getattr(clause, "clause_order", 0)), clause))
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        rule_candidate_map[rule_code] = [item[2] for item in scored[:max_clauses_per_rule]]
+    return rule_candidate_map
+
+
 def _select_candidate_clauses(
     *,
     clauses: list[object],
     rules: list[dict[str, object]],
+    rule_candidate_map: dict[str, list[object]],
     max_clauses: int,
 ) -> list[object]:
     if len(clauses) <= max_clauses:
         return list(clauses)
 
+    preferred_clause_ids = {
+        clause.clause_id
+        for candidate_clauses in rule_candidate_map.values()
+        for clause in candidate_clauses
+    }
     scored: list[tuple[int, int, object]] = []
     for clause in clauses:
-        score = _score_clause_candidate(clause=clause, rules=rules)
+        score = _score_clause_candidate(
+            clause=clause,
+            rules=rules,
+            preferred_clause_ids=preferred_clause_ids,
+        )
         scored.append((score, int(getattr(clause, "clause_order", 0)), clause))
 
     prioritized = sorted(
@@ -317,17 +400,27 @@ def _select_candidate_clauses(
     return sorted(selected, key=lambda clause: int(getattr(clause, "clause_order", 0)))
 
 
-def _score_clause_candidate(*, clause: object, rules: list[dict[str, object]]) -> int:
+def _score_clause_candidate(
+    *,
+    clause: object,
+    rules: list[dict[str, object]],
+    preferred_clause_ids: set[str],
+) -> int:
     score = 0
     chapter_title = str(getattr(clause, "chapter_title", ""))
     clause_type = str(getattr(clause, "clause_type", ""))
     clause_text = str(getattr(clause, "clause_text", ""))
     combined_text = f"{chapter_title}\n{clause_text}"
+    clause_id = str(getattr(clause, "clause_id", ""))
+    modules = set(_classify_clause_business_modules(clause))
 
     if clause_type == "条款片段":
         score += 2
     if any(keyword in chapter_title for keyword in HIGH_VALUE_SECTION_KEYWORDS):
         score += 3
+    score += min(len(modules), 2)
+    if clause_id in preferred_clause_ids:
+        score += 4
 
     matched_high_priority = 0
     matched_normal_priority = 0
@@ -349,28 +442,94 @@ def _score_clause_candidate(*, clause: object, rules: list[dict[str, object]]) -
     return score
 
 
+def _classify_clause_business_modules(clause: object) -> list[str]:
+    chapter_title = str(getattr(clause, "chapter_title", ""))
+    clause_text = str(getattr(clause, "clause_text", ""))
+    combined_text = f"{chapter_title}\n{clause_text}"
+    modules: list[str] = []
+    for module_name, keywords in BUSINESS_MODULE_KEYWORDS.items():
+        if any(keyword in combined_text for keyword in keywords):
+            modules.append(module_name)
+    if not modules:
+        modules.append("其他")
+    return modules
+
+
+def _preferred_modules_for_rule(rule: dict[str, object]) -> tuple[str, ...]:
+    rule_code = str(rule.get("rule_code") or "")
+    if rule_code in RULE_CODE_MODULE_MAP:
+        return RULE_CODE_MODULE_MAP[rule_code]
+    rule_domain = str(rule.get("rule_domain") or "")
+    return RULE_DOMAIN_MODULE_MAP.get(rule_domain, ("采购需求", "资格条件", "评分办法"))
+
+
+def _score_rule_clause_match(
+    *,
+    rule: dict[str, object],
+    clause: object,
+    preferred_modules: set[str],
+) -> int:
+    score = 0
+    clause_modules = set(_classify_clause_business_modules(clause))
+    module_matched = bool(clause_modules & preferred_modules)
+    if module_matched:
+        score += 4
+    clause_type = str(getattr(clause, "clause_type", ""))
+    if clause_type == "条款片段":
+        score += 2
+    chapter_title = str(getattr(clause, "chapter_title", ""))
+    if any(keyword in chapter_title for keyword in HIGH_VALUE_SECTION_KEYWORDS):
+        score += 1
+    text_matched = _rule_matches_batch_text(
+        rule=rule,
+        batch_text=f"{chapter_title}\n{getattr(clause, 'clause_text', '')}",
+    )
+    if text_matched:
+        score += 5
+    if not module_matched and not text_matched:
+        return 0
+    return score
+
+
 def _select_rules_for_clause_batch(
     *,
     rules: list[dict[str, object]],
     clause_batch: list[object],
     rule_limit: int,
+    rule_candidate_map: dict[str, list[object]],
 ) -> list[dict[str, object]]:
     if len(rules) <= rule_limit:
         return list(rules)
 
     batch_text = "\n".join(str(clause.clause_text) for clause in clause_batch)
+    batch_clause_ids = {
+        str(getattr(clause, "clause_id", ""))
+        for clause in clause_batch
+    }
     selected: list[dict[str, object]] = []
     selected_codes: set[str] = set()
 
     for rule in rules:
         rule_code = str(rule.get("rule_code") or "")
         if rule_code in HIGH_PRIORITY_RULE_CODES:
+            if not _rule_has_batch_candidates(
+                rule_code=rule_code,
+                rule_candidate_map=rule_candidate_map,
+                batch_clause_ids=batch_clause_ids,
+            ):
+                continue
             selected.append(rule)
             selected_codes.add(rule_code)
 
     for rule in rules:
         rule_code = str(rule.get("rule_code") or "")
         if rule_code in selected_codes:
+            continue
+        if not _rule_has_batch_candidates(
+            rule_code=rule_code,
+            rule_candidate_map=rule_candidate_map,
+            batch_clause_ids=batch_clause_ids,
+        ):
             continue
         if _rule_matches_batch_text(rule=rule, batch_text=batch_text):
             selected.append(rule)
@@ -382,12 +541,33 @@ def _select_rules_for_clause_batch(
         rule_code = str(rule.get("rule_code") or "")
         if rule_code in selected_codes:
             continue
+        if not _rule_has_batch_candidates(
+            rule_code=rule_code,
+            rule_candidate_map=rule_candidate_map,
+            batch_clause_ids=batch_clause_ids,
+        ):
+            continue
         selected.append(rule)
         selected_codes.add(rule_code)
         if len(selected) >= rule_limit:
             break
 
     return selected[:rule_limit]
+
+
+def _rule_has_batch_candidates(
+    *,
+    rule_code: str,
+    rule_candidate_map: dict[str, list[object]],
+    batch_clause_ids: set[str],
+) -> bool:
+    candidate_ids = {
+        str(getattr(clause, "clause_id", ""))
+        for clause in rule_candidate_map.get(rule_code, [])
+    }
+    if not candidate_ids:
+        return False
+    return bool(candidate_ids & batch_clause_ids)
 
 
 def _rule_matches_batch_text(*, rule: dict[str, object], batch_text: str) -> bool:
