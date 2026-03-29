@@ -4,10 +4,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.asset_loader import ReviewAssetLoader
-from app.llm_client import OpenAiCompatibleLlmClient, load_llm_config_from_env
+from app.llm_client import LlmRequestError, OpenAiCompatibleLlmClient, load_llm_config_from_env
 from app.models import build_evidence_item_record, build_risk_item_record
 from app.repository import JsonRepository
 from app.review_assembler import ReviewInputAssembler
+
+MIN_RETRY_CLAUSE_MAX_CHARS = 300
 
 
 class ReviewExecutor:
@@ -46,14 +48,16 @@ class ReviewExecutor:
             total_findings = 0
             seen_keys: set[tuple[str, str, str]] = set()
 
-            for clause_batch in _chunk_clauses(runtime_input.clauses, self.client.batch_size):
-                findings = self.client.review_batch(
-                    prompt_text=runtime_input.prompt_text,
-                    payload=_build_batch_payload(
-                        runtime_input=runtime_input,
-                        clause_batch=clause_batch,
-                        clause_max_chars=self.client.clause_max_chars,
-                    ),
+            for clause_batch in _chunk_clauses_for_review(
+                runtime_input.clauses,
+                batch_size=self.client.batch_size,
+                clause_max_chars=self.client.clause_max_chars,
+                batch_char_budget=self.client.batch_char_budget,
+            ):
+                findings = self._review_clause_batch(
+                    runtime_input=runtime_input,
+                    clause_batch=clause_batch,
+                    clause_max_chars=self.client.clause_max_chars,
                 )
                 for finding in findings:
                     clause_id = str(finding.get("clause_id") or "").strip()
@@ -124,12 +128,89 @@ class ReviewExecutor:
         finally:
             self.repository.delete_review_job(job_path)
 
+    def _review_clause_batch(
+        self,
+        *,
+        runtime_input: object,
+        clause_batch: list[object],
+        clause_max_chars: int,
+    ) -> list[dict[str, object]]:
+        try:
+            return self.client.review_batch(
+                prompt_text=runtime_input.prompt_text,
+                payload=_build_batch_payload(
+                    runtime_input=runtime_input,
+                    clause_batch=clause_batch,
+                    clause_max_chars=clause_max_chars,
+                ),
+            )
+        except LlmRequestError:
+            if len(clause_batch) > 1:
+                midpoint = max(1, len(clause_batch) // 2)
+                left_findings = self._review_clause_batch(
+                    runtime_input=runtime_input,
+                    clause_batch=clause_batch[:midpoint],
+                    clause_max_chars=clause_max_chars,
+                )
+                right_findings = self._review_clause_batch(
+                    runtime_input=runtime_input,
+                    clause_batch=clause_batch[midpoint:],
+                    clause_max_chars=clause_max_chars,
+                )
+                return left_findings + right_findings
+
+            next_clause_max_chars = _next_retry_clause_max_chars(clause_max_chars)
+            if next_clause_max_chars < clause_max_chars:
+                return self._review_clause_batch(
+                    runtime_input=runtime_input,
+                    clause_batch=clause_batch,
+                    clause_max_chars=next_clause_max_chars,
+                )
+            raise
+
 
 def _chunk_clauses(clauses: list[object], batch_size: int) -> list[list[object]]:
     return [
         clauses[index : index + batch_size]
         for index in range(0, len(clauses), batch_size)
     ]
+
+
+def _chunk_clauses_for_review(
+    clauses: list[object],
+    *,
+    batch_size: int,
+    clause_max_chars: int,
+    batch_char_budget: int,
+) -> list[list[object]]:
+    if not clauses:
+        return []
+
+    chunks: list[list[object]] = []
+    current_chunk: list[object] = []
+    current_char_total = 0
+    effective_char_budget = max(clause_max_chars, batch_char_budget)
+    for clause in clauses:
+        clause_char_count = min(len(clause.clause_text), clause_max_chars)
+        if current_chunk and (
+            len(current_chunk) >= batch_size
+            or current_char_total + clause_char_count > effective_char_budget
+        ):
+            chunks.append(current_chunk)
+            current_chunk = []
+            current_char_total = 0
+        current_chunk.append(clause)
+        current_char_total += clause_char_count
+
+    if current_chunk:
+        chunks.append(current_chunk)
+    return chunks
+
+
+def _next_retry_clause_max_chars(clause_max_chars: int) -> int:
+    if clause_max_chars <= MIN_RETRY_CLAUSE_MAX_CHARS:
+        return clause_max_chars
+    return max(MIN_RETRY_CLAUSE_MAX_CHARS, clause_max_chars // 2)
 
 
 def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], clause_max_chars: int) -> dict[str, object]:

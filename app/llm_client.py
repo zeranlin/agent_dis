@@ -26,6 +26,7 @@ class LlmClientConfig:
     model: str
     timeout_seconds: float
     batch_size: int
+    batch_char_budget: int
     clause_max_chars: int
     max_completion_tokens: int
     reasoning_effort: str
@@ -51,7 +52,12 @@ def load_llm_config_from_env() -> LlmClientConfig:
     timeout_seconds = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", "90"))
     batch_size = max(1, int(os.environ.get("OPENAI_REVIEW_BATCH_SIZE", "8")))
     clause_max_chars = max(200, int(os.environ.get("OPENAI_REVIEW_CLAUSE_MAX_CHARS", "1200")))
-    max_completion_tokens = max(128, int(os.environ.get("OPENAI_MAX_COMPLETION_TOKENS", "800")))
+    default_batch_char_budget = max(clause_max_chars, min(batch_size * clause_max_chars, 1400))
+    batch_char_budget = max(
+        clause_max_chars,
+        int(os.environ.get("OPENAI_REVIEW_BATCH_CHAR_BUDGET", str(default_batch_char_budget))),
+    )
+    max_completion_tokens = max(128, int(os.environ.get("OPENAI_MAX_COMPLETION_TOKENS", "512")))
     reasoning_effort = (os.environ.get("OPENAI_REASONING_EFFORT") or "low").strip() or "low"
     disable_thinking = (os.environ.get("OPENAI_DISABLE_THINKING") or "").strip().lower() in {
         "1",
@@ -66,6 +72,7 @@ def load_llm_config_from_env() -> LlmClientConfig:
         model=model,
         timeout_seconds=timeout_seconds,
         batch_size=batch_size,
+        batch_char_budget=batch_char_budget,
         clause_max_chars=clause_max_chars,
         max_completion_tokens=max_completion_tokens,
         reasoning_effort=reasoning_effort,
@@ -84,6 +91,10 @@ class OpenAiCompatibleLlmClient:
     @property
     def clause_max_chars(self) -> int:
         return self.config.clause_max_chars
+
+    @property
+    def batch_char_budget(self) -> int:
+        return self.config.batch_char_budget
 
     def review_batch(self, *, prompt_text: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
         endpoint = f"{self.config.base_url}/chat/completions"
@@ -105,7 +116,7 @@ class OpenAiCompatibleLlmClient:
                     "content": (
                         "请基于以下输入执行结构化审查，并仅输出形如 "
                         '{"findings":[...]} 的 JSON。\n'
-                        f"{json.dumps(payload, ensure_ascii=False, indent=2)}"
+                        f"{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
                     ),
                 },
             ],

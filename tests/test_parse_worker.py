@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 from app.asset_loader import ReviewAssetLoader
+from app.llm_client import LlmRequestError
 from app.llm_client import _extract_message_content, _parse_json_content
 from app.models import build_clause_record, build_evidence_item_record, build_risk_item_record
 from app.parser_worker import ParseWorker
@@ -17,7 +18,12 @@ from app.result_presenter import group_risks
 from app.repository import JsonRepository
 from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
-from app.review_executor import ReviewExecutor, _build_batch_payload
+from app.review_executor import (
+    ReviewExecutor,
+    _build_batch_payload,
+    _chunk_clauses_for_review,
+    _next_retry_clause_max_chars,
+)
 from app.upload_service import UploadFile, UploadService
 from app.worker_runner import WorkerRunner
 from tests.llm_test_support import fake_llm_environment
@@ -807,6 +813,94 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("片段", evidences[0].evidence_note)
             self.assertEqual(list((Path(runtime_dir) / "queues" / "review").glob("*.json")), [])
             self.assertEqual(len(list((Path(runtime_dir) / "queues" / "result").glob("*.json"))), 1)
+
+    def test_chunk_clauses_for_review_respects_count_and_char_budget(self):
+        class ClauseStub:
+            def __init__(self, clause_text: str):
+                self.clause_text = clause_text
+
+        clauses = [
+            ClauseStub("a" * 320),
+            ClauseStub("b" * 310),
+            ClauseStub("c" * 280),
+            ClauseStub("d" * 200),
+        ]
+
+        chunks = _chunk_clauses_for_review(
+            clauses,
+            batch_size=4,
+            clause_max_chars=400,
+            batch_char_budget=700,
+        )
+
+        self.assertEqual([len(chunk) for chunk in chunks], [2, 2])
+
+    def test_next_retry_clause_max_chars_has_floor(self):
+        self.assertEqual(_next_retry_clause_max_chars(900), 450)
+        self.assertEqual(_next_retry_clause_max_chars(450), 300)
+        self.assertEqual(_next_retry_clause_max_chars(300), 300)
+
+    def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
+        class FlakyClient:
+            batch_size = 4
+            clause_max_chars = 800
+            batch_char_budget = 1000
+
+            def review_batch(self, *, prompt_text: str, payload: dict[str, object]) -> list[dict[str, object]]:
+                clauses = payload["clauses"]
+                assert isinstance(clauses, list)
+                if len(clauses) > 1:
+                    raise LlmRequestError("mock 504")
+                clause = clauses[0]
+                assert isinstance(clause, dict)
+                return [
+                    {
+                        "clause_id": clause["clause_id"],
+                        "rule_code": "R1",
+                        "risk_title": "地域限制条款",
+                        "risk_level": "高",
+                        "risk_category": "公平竞争",
+                        "evidence_text": str(clause["clause_text"]),
+                        "review_reasoning": "模拟拆批后成功。",
+                        "need_human_confirm": False,
+                    }
+                ]
+
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir, fake_llm_environment():
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 资格要求",
+                            "1.1 供应商资格",
+                            "供应商须本地注册并在本地办公。",
+                            "1.2 服务要求",
+                            "供应商须提供本地常驻服务团队。",
+                            "第二章 评分办法",
+                            "2.1 评分标准",
+                            "采用综合评价并可酌情打分。",
+                        ]
+                    ),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+
+            executor = ReviewExecutor(repository, root_dir)
+            executor.client = FlakyClient()
+
+            processed_count = executor.run_pending_jobs()
+
+            self.assertEqual(processed_count, 1)
+            task = repository.get_task(upload_response["task_id"])
+            self.assertIsNotNone(task)
+            assert task is not None
+            self.assertEqual(task.internal_status, "aggregating")
+            risks = repository.list_risks_by_task(upload_response["task_id"])
+            self.assertGreaterEqual(len(risks), 2)
 
     def test_result_aggregator_generates_result_and_marks_task_completed(self):
         root_dir = Path(__file__).resolve().parent.parent
