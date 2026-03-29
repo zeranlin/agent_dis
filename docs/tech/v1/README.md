@@ -57,6 +57,7 @@
 - `implementation-prep-round-30.md`：第三十轮实现准备，聚焦验收执行支持、最终交付说明与交接材料清单
 - `implementation-prep-round-31.md`：第三十一轮实现准备，聚焦上传页、等待页与结果页的最小页面闭环补齐
 - `llm-v1-reduction-plan.md`：`LLM V1` 收缩方案草案，聚焦当前 `LLM` 使用边界收紧、分批执行、最小重试和可验证版本收口
+- `overall-reassessment-summary.md`：当前阶段整体再梳理说明，统一收口当前阶段已完成工作、核心问题、整体调整方向与下一步总判断
 
 ## 交付准备模板
 
