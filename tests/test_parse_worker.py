@@ -23,6 +23,7 @@ from app.review_executor import (
     _build_batch_payload,
     _classify_clause_business_modules,
     _chunk_clauses_for_review,
+    _normalize_finding_rule_code,
     _next_retry_clause_max_chars,
     _select_candidate_clauses,
     _select_rule_candidate_clause_map,
@@ -1566,6 +1567,93 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertEqual(_next_retry_clause_max_chars(900), 450)
         self.assertEqual(_next_retry_clause_max_chars(450), 300)
         self.assertEqual(_next_retry_clause_max_chars(300), 300)
+
+    def test_normalize_finding_rule_code_remaps_scoring_semantics_from_r12_to_r9(self):
+        clause = build_clause_record(
+            clause_id="score_clause",
+            document_id="d1",
+            chapter_id="ch1",
+            chapter_title="第四章 评分办法",
+            clause_order=1,
+            clause_text="①评审为优（方案内容全面、清晰、针对性强、可操作性强）的，最高得40分。",
+            location_label="第四章 评分办法 / 4.1",
+            module_type="评分办法",
+            unit_type="评分项",
+            unit_label="单个评分项",
+            unit_name="售后服务及培训方案评价",
+            clause_type="条款片段",
+        )
+
+        normalized = _normalize_finding_rule_code(
+            finding={
+                "rule_code": "R12",
+                "risk_title": "评分标准量化不足，存在主观裁量空间",
+                "review_reasoning": "采用优良中差式打分，评审尺度不够量化。",
+                "evidence_text": "①评审为优（方案内容全面、清晰、针对性强、可操作性强）的，最高得40分。",
+            },
+            clause=clause,
+            available_rule_codes={"R9", "R12"},
+        )
+
+        self.assertEqual(normalized, "R9")
+
+    def test_normalize_finding_rule_code_keeps_contract_semantics_on_r12(self):
+        clause = build_clause_record(
+            clause_id="contract_clause",
+            document_id="d1",
+            chapter_id="ch2",
+            chapter_title="第五章 合同条款",
+            clause_order=2,
+            clause_text="终验合格后支付至合同金额的95%，剩余款项待财政资金下达后支付。",
+            location_label="第五章 合同条款 / 5.2",
+            module_type="合同条款",
+            unit_type="合同项",
+            unit_label="付款条款",
+            unit_name="付款安排",
+            clause_type="条款片段",
+        )
+
+        normalized = _normalize_finding_rule_code(
+            finding={
+                "rule_code": "R12",
+                "risk_title": "付款节点与财政资金下达挂钩，合同责任分配失衡",
+                "review_reasoning": "付款条件受采购人内部资金到位影响，供应商回款风险偏高。",
+                "evidence_text": "剩余款项待财政资金下达后支付。",
+            },
+            clause=clause,
+            available_rule_codes={"R9", "R12"},
+        )
+
+        self.assertEqual(normalized, "R12")
+
+    def test_normalize_finding_rule_code_remaps_scoring_keywords_even_for_generic_unit(self):
+        clause = build_clause_record(
+            clause_id="generic_score_clause",
+            document_id="d1",
+            chapter_id="ch3",
+            chapter_title="第五章 其他要求",
+            clause_order=3,
+            clause_text="①评审为优的最高得40分；②评审为良的最高得20分；③评审为中的最高得10分。",
+            location_label="第五章 其他要求 / 售后服务及培训方案评价",
+            module_type="其他",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="售后服务及培训方案评价",
+            clause_type="条款片段",
+        )
+
+        normalized = _normalize_finding_rule_code(
+            finding={
+                "rule_code": "R12",
+                "risk_title": "评分标准量化不足，存在自由裁量权过大风险",
+                "review_reasoning": "采用优良中差式评审，评分标准不够客观量化。",
+                "evidence_text": "①评审为优的最高得40分；②评审为良的最高得20分；③评审为中的最高得10分。",
+            },
+            clause=clause,
+            available_rule_codes={"R1", "R9", "R12"},
+        )
+
+        self.assertEqual(normalized, "R9")
 
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:

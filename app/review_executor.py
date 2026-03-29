@@ -69,6 +69,22 @@ RULE_CODE_UNIT_LABEL_HINTS = {
     "R12": ("付款条款", "验收条款", "违约责任条款", "质保条款", "费用承担条款", "单条合同条款", "商务要求项"),
 }
 GENERIC_UNIT_LABELS = {"普通条款", "普通表格行", "不确定审查对象"}
+SCORING_UNIT_LABELS = {"单个评分项", "价格分规则", "商务分规则", "技术分规则"}
+SCORING_SIGNAL_KEYWORDS = (
+    "评分",
+    "评审",
+    "打分",
+    "得分",
+    "分值",
+    "量化",
+    "综合评分",
+    "综合评价",
+    "优良中差",
+    "主观",
+    "酌情",
+    "自由裁量",
+    "裁量空间",
+)
 
 
 class ReviewExecutor:
@@ -132,10 +148,15 @@ class ReviewExecutor:
                     rule_limit=rule_limit,
                     rule_candidate_map=rule_candidate_map,
                 )
+                available_rule_codes = set(rules_by_code)
                 for finding in findings:
                     clause_id = str(finding.get("clause_id") or "").strip()
-                    rule_code = str(finding.get("rule_code") or "").strip()
                     clause = clauses_by_id.get(clause_id)
+                    rule_code = _normalize_finding_rule_code(
+                        finding=finding,
+                        clause=clause,
+                        available_rule_codes=available_rule_codes,
+                    )
                     rule = rules_by_code.get(rule_code)
                     if clause is None or rule is None:
                         continue
@@ -676,6 +697,39 @@ def _normalize_risk_level(value: object, *, fallback: str) -> str:
     if level in {"高", "中", "低"}:
         return level
     return fallback
+
+
+def _normalize_finding_rule_code(
+    *,
+    finding: dict[str, object],
+    clause: object | None,
+    available_rule_codes: set[str],
+) -> str:
+    rule_code = str(finding.get("rule_code") or "").strip()
+    if rule_code != "R12" or clause is None:
+        return rule_code
+    if "R9" not in available_rule_codes:
+        return rule_code
+    if not _looks_like_scoring_finding(finding=finding, clause=clause):
+        return rule_code
+    return "R9"
+
+
+def _looks_like_scoring_finding(*, finding: dict[str, object], clause: object) -> bool:
+    unit_label = str(getattr(clause, "unit_label", "")).strip()
+    module_type = str(getattr(clause, "module_type", "")).strip()
+    if module_type == "评分办法" or unit_label in SCORING_UNIT_LABELS:
+        return True
+
+    summary_text = "\n".join(
+        part
+        for part in (
+            str(getattr(clause, "unit_name", "")),
+            str(finding.get("risk_title") or ""),
+        )
+        if part
+    )
+    return any(keyword in summary_text for keyword in SCORING_SIGNAL_KEYWORDS)
 
 
 def _normalize_bool(value: object) -> bool:
