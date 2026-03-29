@@ -1182,6 +1182,93 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertEqual([clause.clause_id for clause in mapping["R3"]], ["c1"])
         self.assertEqual([clause.clause_id for clause in mapping["R9"]], ["c2"])
 
+    def test_select_rule_candidate_clause_map_prefers_specific_review_units(self):
+        rules = [
+            {
+                "rule_code": "R9",
+                "rule_name": "评分项未量化检查",
+                "rule_domain": "评审可解释性规则",
+                "hit_definition": "综合评价、酌情打分时命中。",
+                "focus_terms": ["综合评价", "酌情打分"],
+                "positive_examples": ["根据方案优良中差酌情打分。"],
+            },
+            {
+                "rule_code": "R12",
+                "rule_name": "关键条款缺失/责任失衡检查",
+                "rule_domain": "合同与程序风险规则",
+                "hit_definition": "责任失衡或关键条款缺失时命中。",
+                "focus_terms": ["第三方检测费用", "全部由中标人承担"],
+                "positive_examples": ["检测费用全部由中标人承担。"],
+            },
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="score_generic",
+                document_id="d1",
+                chapter_id="ch1",
+                chapter_title="第二章 评分办法",
+                clause_order=1,
+                clause_text="本项目采用综合评分法。",
+                location_label="第二章 评分办法 / 2.1",
+                module_type="评分办法",
+                unit_type="条款",
+                unit_label="普通条款",
+                unit_name="评审方法",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="score_item",
+                document_id="d1",
+                chapter_id="ch1",
+                chapter_title="第二章 评分办法",
+                clause_order=2,
+                clause_text="根据培训方案优良中差酌情打分。",
+                location_label="第二章 评分办法 / 2.2",
+                module_type="评分办法",
+                unit_type="评分项",
+                unit_label="单个评分项",
+                unit_name="培训方案评分",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="contract_generic",
+                document_id="d1",
+                chapter_id="ch2",
+                chapter_title="第五章 合同条款",
+                clause_order=3,
+                clause_text="合同其他事项说明。",
+                location_label="第五章 合同条款 / 5.1",
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="单条合同条款",
+                unit_name="其他事项",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="expense_clause",
+                document_id="d1",
+                chapter_id="ch2",
+                chapter_title="第五章 合同条款",
+                clause_order=4,
+                clause_text="第三方检测费用全部由中标人承担，无论结果是否合格。",
+                location_label="第五章 合同条款 / 5.2",
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="费用承担条款",
+                unit_name="检测费用承担",
+                clause_type="条款片段",
+            ),
+        ]
+
+        mapping = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in mapping["R9"][:2]], ["score_item", "score_generic"])
+        self.assertEqual([clause.clause_id for clause in mapping["R12"][:2]], ["expense_clause", "contract_generic"])
+
     def test_select_candidate_clauses_prefers_high_value_sections_and_matches(self):
         rules = [
             {

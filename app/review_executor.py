@@ -54,6 +54,21 @@ RULE_CODE_MODULE_MAP = {
     "R11": ("评分办法", "资格条件"),
     "R12": ("合同条款", "程序条款"),
 }
+RULE_CODE_UNIT_LABEL_HINTS = {
+    "R1": ("单条资格要求", "单条信用要求", "资格性审查表", "商务要求项"),
+    "R2": ("单条资格要求", "单条资质要求", "资格性审查表"),
+    "R3": ("单条资格要求", "单条业绩要求", "单条资质要求", "单条信用要求", "资格性审查表", "商务要求项"),
+    "R4": ("单条业绩要求", "单个评分项", "商务分规则", "资格性审查表"),
+    "R5": ("单条技术参数", "单个参数项", "单条功能要求", "单条服务要求", "单个偏离项", "商务要求项"),
+    "R6": ("单条技术参数", "单个参数项", "单条功能要求", "单个偏离项"),
+    "R7": ("单条技术参数", "单个参数项", "单条功能要求", "单条服务要求", "单条交付要求", "商务要求项"),
+    "R8": ("单条技术参数", "单个参数项", "单条功能要求", "单条服务要求", "单条交付要求"),
+    "R9": ("单个评分项", "价格分规则", "商务分规则", "技术分规则"),
+    "R10": ("单个评分项", "价格分规则", "商务分规则", "技术分规则"),
+    "R11": ("资格性审查表", "符合性审查表", "单个评分项", "价格分规则", "商务分规则", "技术分规则"),
+    "R12": ("付款条款", "验收条款", "违约责任条款", "质保条款", "费用承担条款", "单条合同条款", "商务要求项"),
+}
+GENERIC_UNIT_LABELS = {"普通条款", "普通表格行", "不确定审查对象"}
 
 
 class ReviewExecutor:
@@ -471,17 +486,30 @@ def _preferred_modules_for_rule(rule: dict[str, object]) -> tuple[str, ...]:
     return RULE_DOMAIN_MODULE_MAP.get(rule_domain, ("采购需求", "资格条件", "评分办法"))
 
 
+def _preferred_unit_labels_for_rule(rule: dict[str, object]) -> tuple[str, ...]:
+    rule_code = str(rule.get("rule_code") or "")
+    return RULE_CODE_UNIT_LABEL_HINTS.get(rule_code, tuple())
+
+
 def _score_rule_clause_match(
     *,
     rule: dict[str, object],
     clause: object,
     preferred_modules: set[str],
 ) -> int:
+    rule_unit_labels = set(_preferred_unit_labels_for_rule(rule))
     score = 0
     clause_modules = set(_classify_clause_business_modules(clause))
     module_matched = bool(clause_modules & preferred_modules)
     if module_matched:
         score += 4
+    unit_label = str(getattr(clause, "unit_label", "")).strip()
+    if unit_label in rule_unit_labels:
+        score += 4
+    elif unit_label and unit_label not in GENERIC_UNIT_LABELS:
+        score += 1
+    elif unit_label in GENERIC_UNIT_LABELS:
+        score -= 1
     clause_type = str(getattr(clause, "clause_type", ""))
     if clause_type == "条款片段":
         score += 2
