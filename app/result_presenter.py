@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+from difflib import SequenceMatcher
 
 SEVERITY_ORDER = {"高": 0, "中": 1, "低": 2}
 
@@ -25,16 +27,143 @@ def sort_risks_for_display(risks: list[object]) -> list[object]:
     )
 
 
-def build_top_risk_payload(risk: object) -> dict[str, object]:
+def _normalize_text(text: str) -> str:
+    return "".join(char for char in text if char.isalnum())
+
+
+def _unique_texts(values: list[str], *, limit: int | None = None) -> list[str]:
+    seen: OrderedDict[str, str] = OrderedDict()
+    for value in values:
+        cleaned = value.strip()
+        if not cleaned:
+            continue
+        normalized = _normalize_text(cleaned)
+        if not normalized or normalized in seen:
+            continue
+        seen[normalized] = cleaned
+        if limit is not None and len(seen) >= limit:
+            break
+    return list(seen.values())
+
+
+def merge_texts(values: list[str], *, fallback: str = "无", limit: int | None = 2) -> str:
+    unique_values = _unique_texts(values, limit=limit)
+    if not unique_values:
+        return fallback
+    return "；".join(unique_values)
+
+
+def _risk_similarity(left: object, right: object) -> float:
+    left_text = _normalize_text(f"{left.risk_description}{left.review_reasoning}")
+    right_text = _normalize_text(f"{right.risk_description}{right.review_reasoning}")
+    if not left_text or not right_text:
+        return 0.0
+    return SequenceMatcher(a=left_text, b=right_text).ratio()
+
+
+def _should_merge_risk(representative: object, candidate: object) -> bool:
+    if str(representative.rule_id) != str(candidate.rule_id):
+        return False
+    if str(representative.clause_id) == str(candidate.clause_id):
+        return True
+    if str(representative.location_label) == str(candidate.location_label):
+        return True
+    if extract_chapter_title(str(representative.location_label)) != extract_chapter_title(str(candidate.location_label)):
+        return False
+    return _risk_similarity(representative, candidate) >= 0.88
+
+
+def group_risks(
+    *,
+    risks: list[object],
+    repository: object,
+) -> list[dict[str, object]]:
+    grouped: list[dict[str, object]] = []
+    for risk in sort_risks_for_display(risks):
+        bucket = next(
+            (
+                item
+                for item in grouped
+                if _should_merge_risk(item["representative"], risk)
+            ),
+            None,
+        )
+        if bucket is None:
+            bucket = {
+                "representative": risk,
+                "risks": [],
+                "evidences": [],
+            }
+            grouped.append(bucket)
+        bucket["risks"].append(risk)
+        bucket["evidences"].extend(repository.list_evidences_by_risk(risk.risk_id))
+
+    groups: list[dict[str, object]] = []
+    for bucket in grouped:
+        representative = bucket["representative"]
+        merged_risks = list(bucket["risks"])
+        merged_evidences = list(bucket["evidences"])
+        groups.append(
+            {
+                "risk_id": representative.risk_id,
+                "risk_title": representative.risk_title,
+                "risk_level": representative.risk_level,
+                "rule_id": representative.rule_id,
+                "rule_domain": representative.rule_domain,
+                "location_label": representative.location_label,
+                "chapter_title": extract_chapter_title(representative.location_label),
+                "clause_type": extract_clause_type(representative.review_reasoning),
+                "risk_description": merge_texts(
+                    [str(item.risk_description) for item in merged_risks],
+                    fallback=str(representative.risk_description),
+                ),
+                "review_reasoning": merge_texts(
+                    [str(item.review_reasoning) for item in merged_risks],
+                    fallback=str(representative.review_reasoning),
+                ),
+                "evidence_text": merge_texts(
+                    [str(item.quoted_text) for item in merged_evidences],
+                    fallback="无",
+                ),
+                "evidence_note": merge_texts(
+                    [str(item.evidence_note) for item in merged_evidences],
+                    fallback="无",
+                ),
+                "merged_hit_count": len(merged_risks),
+                "merged_risk_ids": [str(item.risk_id) for item in merged_risks],
+                "created_at": representative.created_at,
+            }
+        )
+    return sorted(
+        groups,
+        key=lambda item: (SEVERITY_ORDER.get(str(item["risk_level"]), 9), str(item["created_at"])),
+    )
+
+
+def count_risk_groups(risk_groups: list[dict[str, object]]) -> dict[str, int]:
+    summary = {"high": 0, "medium": 0, "low": 0}
+    for group in risk_groups:
+        level = str(group["risk_level"])
+        if level == "高":
+            summary["high"] += 1
+        elif level == "中":
+            summary["medium"] += 1
+        elif level == "低":
+            summary["low"] += 1
+    return summary
+
+
+def build_top_risk_payload(risk_group: dict[str, object]) -> dict[str, object]:
     return {
-        "risk_id": risk.risk_id,
-        "risk_title": risk.risk_title,
-        "risk_level": risk.risk_level,
-        "location_label": risk.location_label,
-        "chapter_title": extract_chapter_title(risk.location_label),
-        "clause_type": extract_clause_type(risk.review_reasoning),
-        "risk_description": risk.risk_description,
-        "review_reasoning": risk.review_reasoning,
+        "risk_id": risk_group["risk_id"],
+        "risk_title": risk_group["risk_title"],
+        "risk_level": risk_group["risk_level"],
+        "location_label": risk_group["location_label"],
+        "chapter_title": risk_group["chapter_title"],
+        "clause_type": risk_group["clause_type"],
+        "risk_description": risk_group["risk_description"],
+        "review_reasoning": risk_group["review_reasoning"],
+        "merged_hit_count": risk_group["merged_hit_count"],
     }
 
 
@@ -91,11 +220,11 @@ def build_completed_page_payload(
         "support_notes": [
             {
                 "title": "查看提示",
-                "body": "如果需要继续核对，可先从重点风险摘要进入，再回到完整审查报告查看上下文。",
+                "body": "如果需要继续核对，可先从重点风险组摘要进入，再回到完整审查报告查看上下文。",
             },
             {
                 "title": "联调说明",
-                "body": "结果页主要消费结果接口、状态接口和下载地址。联调时可先确认结果接口字段，再检查下载链接是否与页面展示一致。",
+                "body": "结果页主要消费结果接口、状态接口和下载地址。联调时应优先确认风险组统计与页面展示是否一致。",
             },
         ],
     }

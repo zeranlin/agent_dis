@@ -68,6 +68,7 @@ ul { line-height: 1.8; }
         risk_items_html = "".join(
             "<li class=\"risk-item\">"
             f"<strong>{escape(str(item['risk_title']))}</strong> | {escape(str(item['risk_level']))}<br>"
+            f"<span class=\"tiny\">归并命中数：{escape(str(item.get('merged_hit_count') or 1))}</span><br>"
             f"<span class=\"tiny\">章节上下文：{escape(str(item.get('chapter_title') or '未标注'))}</span><br>"
             f"<span class=\"tiny\">片段类型：{escape(str(item.get('clause_type') or '未标注'))}</span><br>"
             f"<span class=\"tiny\">命中位置：{escape(str(item['location_label']))}</span><br>"
@@ -92,11 +93,11 @@ ul { line-height: 1.8; }
   <h1>{title}</h1>
   <p class="meta">文件：{file_name}</p>
   <p class="lead">{message}</p>
-  <p class="tiny">结果生成时间：{generated_at}。建议先浏览风险概览，再查看详细结论。</p>
+  <p class="tiny">结果生成时间：{generated_at}。当前统计优先展示归并后的风险组数量，建议先浏览风险组概览，再查看详细结论。</p>
   <div class="grid">
-    <div class="card"><h3>高风险</h3><p>{escape(str(risk_count_summary["high"]))}</p></div>
-    <div class="card"><h3>中风险</h3><p>{escape(str(risk_count_summary["medium"]))}</p></div>
-    <div class="card"><h3>低风险</h3><p>{escape(str(risk_count_summary["low"]))}</p></div>
+    <div class="card"><h3>高风险组</h3><p>{escape(str(risk_count_summary["high"]))}</p></div>
+    <div class="card"><h3>中风险组</h3><p>{escape(str(risk_count_summary["medium"]))}</p></div>
+    <div class="card"><h3>低风险组</h3><p>{escape(str(risk_count_summary["low"]))}</p></div>
   </div>
   <div class="split">
     <div>
@@ -105,7 +106,7 @@ ul { line-height: 1.8; }
       <p class="tiny">{page_guidance}</p>
       </div>
       <div class="section">
-      <h2>优先关注的风险</h2>
+      <h2>优先关注的风险组</h2>
       <ul>{risk_items_html}</ul>
       </div>
       <div class="section">

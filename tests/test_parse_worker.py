@@ -10,9 +10,10 @@ from pathlib import Path
 
 from app.asset_loader import ReviewAssetLoader
 from app.llm_client import _extract_message_content, _parse_json_content
-from app.models import build_clause_record, build_risk_item_record
+from app.models import build_clause_record, build_evidence_item_record, build_risk_item_record
 from app.parser_worker import ParseWorker
 from app.result_aggregator import build_report_markdown
+from app.result_presenter import group_risks
 from app.repository import JsonRepository
 from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
@@ -144,60 +145,178 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertEqual(len(clauses), 160)
 
     def test_build_report_markdown_sorts_risks_by_severity_for_display(self):
-        class EmptyEvidenceRepository:
-            @staticmethod
-            def list_evidences_by_risk(_risk_id: str) -> list[object]:
-                return []
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            low_risk = build_risk_item_record(
+                risk_id="risk_low",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_001",
+                rule={
+                    "rule_id": "rule_low",
+                    "rule_name": "低风险规则",
+                    "risk_level": "低",
+                    "execution_level": "辅助提示",
+                    "rule_domain": "采购需求",
+                    "file_module": "采购需求",
+                },
+                location_label="第二章 评分办法 / 2.1 评分标准",
+                risk_description="低风险说明",
+                review_reasoning="当前最小执行骨架在“第二章 评分办法 / 2.1 评分标准”识别到关键词“酌情”，属于第二章 评分办法的段落片段。",
+            )
+            high_risk = build_risk_item_record(
+                risk_id="risk_high",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_002",
+                rule={
+                    "rule_id": "rule_high",
+                    "rule_name": "高风险规则",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "资格条件",
+                    "file_module": "资格条件",
+                },
+                location_label="第一章 资格要求 / 1.1 供应商资格",
+                risk_description="高风险说明",
+                review_reasoning="当前最小执行骨架在“第一章 资格要求 / 1.1 供应商资格”识别到关键词“本地注册”，属于第一章 资格要求的条款片段。",
+            )
+            low_risk.created_at = "2026-03-29T10:00:02+08:00"
+            high_risk.created_at = "2026-03-29T10:00:01+08:00"
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_high",
+                    risk_id="risk_high",
+                    document_id="document_001",
+                    clause_id="clause_002",
+                    quoted_text="供应商须本地注册并在本地办公。",
+                    location_label="第一章 资格要求 / 1.1 供应商资格",
+                    evidence_note="原文证据来自资格条款。",
+                )
+            )
 
-        low_risk = build_risk_item_record(
-            risk_id="risk_low",
-            task_id="task_001",
-            project_id="project_001",
-            document_id="document_001",
-            clause_id="clause_001",
-            rule={
-                "rule_id": "rule_low",
-                "rule_name": "低风险规则",
-                "risk_level": "低",
-                "execution_level": "辅助提示",
-                "rule_domain": "采购需求",
-                "file_module": "采购需求",
-            },
-            location_label="第二章 评分办法 / 2.1 评分标准",
-            risk_description="低风险说明",
-            review_reasoning="当前最小执行骨架在“第二章 评分办法 / 2.1 评分标准”识别到关键词“酌情”，属于第二章 评分办法的段落片段。",
-        )
-        high_risk = build_risk_item_record(
-            risk_id="risk_high",
-            task_id="task_001",
-            project_id="project_001",
-            document_id="document_001",
-            clause_id="clause_002",
-            rule={
-                "rule_id": "rule_high",
-                "rule_name": "高风险规则",
+            risk_groups = group_risks(risks=[low_risk, high_risk], repository=repository)
+            markdown = build_report_markdown(
+                file_name="招标文件.docx",
+                overall_conclusion="测试结论",
+                risk_groups=risk_groups,
+            )
+
+            self.assertLess(markdown.index("高风险规则"), markdown.index("低风险规则"))
+            self.assertIn("- 章节上下文：第一章 资格要求", markdown)
+            self.assertIn("- 片段类型：条款片段", markdown)
+            self.assertIn("### 风险组 1", markdown)
+            self.assertIn("- 归并命中数：1", markdown)
+
+    def test_group_risks_merges_same_clause_and_rule_duplicates(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            risk_a = build_risk_item_record(
+                risk_id="risk_a",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_001",
+                rule={
+                    "rule_id": "rule_r3",
+                    "rule_name": "资格条件过高检查",
+                    "risk_level": "中",
+                    "execution_level": "辅助提示",
+                    "rule_domain": "合法性规则",
+                    "file_module": "资格条件",
+                },
+                location_label="第三章 商务要求 / 3.1 供应商认证情况",
+                risk_description="要求厂家认证讲师，可能抬高资格门槛。",
+                review_reasoning="当前最小执行骨架识别到厂家认证讲师表述，属于第三章 商务要求的条款片段。",
+            )
+            risk_b = build_risk_item_record(
+                risk_id="risk_b",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_001",
+                rule={
+                    "rule_id": "rule_r3",
+                    "rule_name": "资格条件过高检查",
+                    "risk_level": "中",
+                    "execution_level": "辅助提示",
+                    "rule_domain": "合法性规则",
+                    "file_module": "资格条件",
+                },
+                location_label="第三章 商务要求 / 3.1 供应商认证情况",
+                risk_description="要求执业医师证，可能抬高资格门槛。",
+                review_reasoning="当前最小执行骨架识别到执业医师证表述，属于第三章 商务要求的条款片段。",
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_a",
+                    risk_id="risk_a",
+                    document_id="document_001",
+                    clause_id="clause_001",
+                    quoted_text="培训人员团队为厂家认证讲师。",
+                    location_label="第三章 商务要求 / 3.1 供应商认证情况",
+                    evidence_note="原文证据命中厂家认证讲师。",
+                )
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_b",
+                    risk_id="risk_b",
+                    document_id="document_001",
+                    clause_id="clause_001",
+                    quoted_text="培训人员团队为具有执业医师证的临床医生。",
+                    location_label="第三章 商务要求 / 3.1 供应商认证情况",
+                    evidence_note="原文证据命中执业医师证。",
+                )
+            )
+
+            risk_groups = group_risks(risks=[risk_a, risk_b], repository=repository)
+
+            self.assertEqual(len(risk_groups), 1)
+            self.assertEqual(risk_groups[0]["merged_hit_count"], 2)
+            self.assertIn("厂家认证讲师", str(risk_groups[0]["risk_description"]))
+            self.assertIn("执业医师证", str(risk_groups[0]["risk_description"]))
+
+    def test_group_risks_merges_same_location_and_rule_duplicates(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            base_rule = {
+                "rule_id": "rule_r9",
+                "rule_name": "评分项未量化检查",
                 "risk_level": "高",
                 "execution_level": "自动判定",
-                "rule_domain": "资格条件",
-                "file_module": "资格条件",
-            },
-            location_label="第一章 资格要求 / 1.1 供应商资格",
-            risk_description="高风险说明",
-            review_reasoning="当前最小执行骨架在“第一章 资格要求 / 1.1 供应商资格”识别到关键词“本地注册”，属于第一章 资格要求的条款片段。",
-        )
-        low_risk.created_at = "2026-03-29T10:00:02+08:00"
-        high_risk.created_at = "2026-03-29T10:00:01+08:00"
+                "rule_domain": "评审可解释性规则",
+                "file_module": "评分办法",
+            }
+            risk_a = build_risk_item_record(
+                risk_id="risk_a",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_001",
+                rule=base_rule,
+                location_label="第二章 评分办法 / 2.1 评分标准",
+                risk_description="评分条款存在优良中差表述，缺少量化标准。",
+                review_reasoning="当前最小执行骨架识别到优良中差表述，属于第二章 评分办法的条款片段。",
+            )
+            risk_b = build_risk_item_record(
+                risk_id="risk_b",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_002",
+                rule=base_rule,
+                location_label="第二章 评分办法 / 2.1 评分标准",
+                risk_description="评分条款以优良中差酌情打分，量化口径不足。",
+                review_reasoning="当前最小执行骨架识别到酌情打分表述，属于第二章 评分办法的条款片段。",
+            )
 
-        markdown = build_report_markdown(
-            file_name="招标文件.docx",
-            overall_conclusion="测试结论",
-            risks=[low_risk, high_risk],
-            repository=EmptyEvidenceRepository(),
-        )
+            risk_groups = group_risks(risks=[risk_a, risk_b], repository=repository)
 
-        self.assertLess(markdown.index("高风险规则"), markdown.index("低风险规则"))
-        self.assertIn("- 章节上下文：第一章 资格要求", markdown)
-        self.assertIn("- 片段类型：条款片段", markdown)
+            self.assertEqual(len(risk_groups), 1)
+            self.assertEqual(risk_groups[0]["merged_hit_count"], 2)
 
     def test_parse_worker_consumes_queue_and_marks_task_review_queued(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
@@ -674,6 +793,8 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("# 最终结论", result.conclusion_markdown)
             self.assertIn("- 章节上下文：第一章 资格要求", result.report_markdown)
             self.assertIn("- 片段类型：条款片段", result.report_markdown)
+            self.assertIn("风险组", result.report_markdown)
+            self.assertIn("高风险组数量", result.conclusion_markdown)
             self.assertTrue(Path(result.report_file_path).exists())
             self.assertTrue(Path(result.conclusion_file_path).exists())
             self.assertEqual(list((Path(runtime_dir) / "queues" / "result").glob("*.json")), [])

@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.models import build_review_result_record
-from app.result_presenter import extract_chapter_title, extract_clause_type, sort_risks_for_display
+from app.result_presenter import count_risk_groups, group_risks
 from app.repository import JsonRepository
 
 
@@ -29,9 +29,11 @@ class ResultAggregator:
 
         try:
             risks = self.repository.list_risks_by_task(task.task_id)
-            risk_count_high = sum(1 for risk in risks if risk.risk_level == "高")
-            risk_count_medium = sum(1 for risk in risks if risk.risk_level == "中")
-            risk_count_low = sum(1 for risk in risks if risk.risk_level == "低")
+            risk_groups = group_risks(risks=risks, repository=self.repository)
+            risk_counts = count_risk_groups(risk_groups)
+            risk_count_high = risk_counts["high"]
+            risk_count_medium = risk_counts["medium"]
+            risk_count_low = risk_counts["low"]
 
             overall_conclusion = build_overall_conclusion(
                 risk_count_high=risk_count_high,
@@ -49,8 +51,7 @@ class ResultAggregator:
             report_markdown = build_report_markdown(
                 file_name=task.file_name,
                 overall_conclusion=overall_conclusion,
-                risks=risks,
-                repository=self.repository,
+                risk_groups=risk_groups,
             )
             report_path = self.repository.save_report_markdown(task.task_id, report_markdown)
             conclusion_path = self.repository.save_conclusion_markdown(task.task_id, conclusion_markdown)
@@ -86,11 +87,11 @@ class ResultAggregator:
 
 def build_overall_conclusion(*, risk_count_high: int, risk_count_medium: int, risk_count_low: int) -> str:
     if risk_count_high > 0:
-        return f"本文件存在 {risk_count_high} 条高风险问题，建议优先复核资格条件、评分规则或定向限制条款。"
+        return f"本文件归并后存在 {risk_count_high} 组高风险问题，建议优先复核资格条件、评分规则或定向限制条款。"
     if risk_count_medium > 0:
-        return f"本文件未发现高风险问题，但存在 {risk_count_medium} 条中风险问题，建议进一步人工复核。"
+        return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，建议进一步人工复核。"
     if risk_count_low > 0:
-        return f"本文件未发现高风险或中风险问题，当前仅识别到 {risk_count_low} 条低风险提示。"
+        return f"本文件未发现高风险或中风险问题，当前归并后仅识别到 {risk_count_low} 组低风险提示。"
     return "当前最小审查链路未识别到明显风险，建议结合人工复核继续确认。"
 
 
@@ -109,11 +110,12 @@ def build_conclusion_markdown(
         "\n## 结论摘要\n\n"
         f"- 总体结论：{overall_conclusion}\n"
         "\n## 风险统计\n\n"
-        f"- 高风险数量：{risk_count_high}\n"
-        f"- 中风险数量：{risk_count_medium}\n"
-        f"- 低风险数量：{risk_count_low}\n"
+        "- 以下数量为按同条款同规则归并后的风险组数量。\n"
+        f"- 高风险组数量：{risk_count_high}\n"
+        f"- 中风险组数量：{risk_count_medium}\n"
+        f"- 低风险组数量：{risk_count_low}\n"
         "\n## 处理建议\n\n"
-        "- 建议审核人员优先复核高风险与中风险条款，再结合原文证据完成人工判断。\n"
+        "- 建议审核人员优先复核高风险与中风险风险组，再结合原文证据完成人工判断。\n"
     )
 
 
@@ -121,8 +123,7 @@ def build_report_markdown(
     *,
     file_name: str,
     overall_conclusion: str,
-    risks: list[object],
-    repository: JsonRepository,
+    risk_groups: list[dict[str, object]],
 ) -> str:
     lines = [
         "# 审查报告",
@@ -139,11 +140,12 @@ def build_report_markdown(
         "",
         "- 本报告基于当前 V1 最小规则包和解析结果自动生成。",
         "- 风险结论仅用于辅助审核，不直接替代人工定性。",
+        "- 当前风险明细按同条款同规则做轻量归并后展示，更接近人工复核视角。",
         "",
-        "## 风险明细",
+        "## 风险组明细",
         "",
     ]
-    if not risks:
+    if not risk_groups:
         lines.extend(
             [
                 "当前未识别到明显风险。",
@@ -152,24 +154,22 @@ def build_report_markdown(
         )
         return "\n".join(lines)
 
-    for index, risk in enumerate(sort_risks_for_display(risks), start=1):
-        evidences = repository.list_evidences_by_risk(risk.risk_id)
-        evidence_text = evidences[0].quoted_text if evidences else "无"
-        evidence_note = evidences[0].evidence_note if evidences else "无"
+    for index, risk_group in enumerate(risk_groups, start=1):
         lines.extend(
             [
-                f"### 风险 {index}",
+                f"### 风险组 {index}",
                 "",
-                f"- 风险标题：{risk.risk_title}",
-                f"- 风险级别：{risk.risk_level}",
-                f"- 规则域：{risk.rule_domain}",
-                f"- 章节上下文：{extract_chapter_title(risk.location_label, default='无')}",
-                f"- 片段类型：{extract_clause_type(risk.review_reasoning, default='未标注')}",
-                f"- 命中位置：{risk.location_label}",
-                f"- 风险说明：{risk.risk_description}",
-                f"- 审查说明：{risk.review_reasoning}",
-                f"- 证据片段：{evidence_text}",
-                f"- 证据说明：{evidence_note}",
+                f"- 风险标题：{risk_group['risk_title']}",
+                f"- 风险级别：{risk_group['risk_level']}",
+                f"- 规则域：{risk_group['rule_domain']}",
+                f"- 章节上下文：{risk_group['chapter_title'] or '无'}",
+                f"- 片段类型：{risk_group['clause_type'] or '未标注'}",
+                f"- 命中位置：{risk_group['location_label']}",
+                f"- 归并命中数：{risk_group['merged_hit_count']}",
+                f"- 风险说明：{risk_group['risk_description']}",
+                f"- 审查说明：{risk_group['review_reasoning']}",
+                f"- 证据片段：{risk_group['evidence_text']}",
+                f"- 证据说明：{risk_group['evidence_note']}",
                 "",
             ]
         )

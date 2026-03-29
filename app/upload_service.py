@@ -10,7 +10,7 @@ from app.result_presenter import (
     build_failed_page_payload,
     build_reviewing_page_payload,
     build_top_risk_payload,
-    sort_risks_for_display,
+    group_risks,
 )
 from app.repository import JsonRepository
 
@@ -130,7 +130,8 @@ class UploadService:
         if result is None:
             raise ResultAccessError(404, "RESULT_NOT_FOUND", "审查结果不存在。")
         risks = self.repository.list_risks_by_task(task_id)
-        top_risks = [build_top_risk_payload(risk) for risk in sort_risks_for_display(risks)[:3]]
+        risk_groups = group_risks(risks=risks, repository=self.repository)
+        top_risks = [build_top_risk_payload(risk_group) for risk_group in risk_groups[:3]]
         return result.to_result_response(file_name=task.file_name, top_risks=top_risks)
 
     def download_result_file(self, task_id: str, file_type: str) -> tuple[str, str, str]:

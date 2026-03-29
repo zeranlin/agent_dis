@@ -287,10 +287,11 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("结果查看页", html)
             self.assertIn("结果已生成", html)
             self.assertIn("建议先这样看", html)
-            self.assertIn("优先关注的风险", html)
+            self.assertIn("优先关注的风险组", html)
             self.assertIn("快速操作", html)
             self.assertIn("查看提示", html)
             self.assertIn("联调说明", html)
+            self.assertIn("归并命中数", html)
             self.assertIn("章节上下文：第一章 资格要求", html)
             self.assertIn("片段类型：条款片段", html)
             self.assertIn("审查说明：", html)
@@ -385,6 +386,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("chapter_title", result_payload["top_risks"][0])
             self.assertIn("clause_type", result_payload["top_risks"][0])
             self.assertIn("review_reasoning", result_payload["top_risks"][0])
+            self.assertIn("merged_hit_count", result_payload["top_risks"][0])
             self.assertEqual(result_payload["downloadable_files"][0]["type"], "markdown")
             self.assertEqual(result_payload["downloadable_files"][0]["file_key"], "conclusion")
             self.assertIn("label", result_payload["downloadable_files"][0])
@@ -400,6 +402,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertIn("## 报告说明", report_content)
             self.assertIn("章节上下文", report_content)
             self.assertIn("片段类型", report_content)
+            self.assertIn("风险组", report_content)
             self.assertIn("attachment;", report_headers["Content-Disposition"])
 
             with urllib.request.urlopen(
@@ -409,6 +412,7 @@ class UploadApiTestCase(unittest.TestCase):
 
             self.assertIn("# 最终结论", conclusion_content)
             self.assertIn("## 风险统计", conclusion_content)
+            self.assertIn("高风险组数量", conclusion_content)
 
     def test_result_endpoint_returns_409_when_not_ready(self):
         with TestServerContext() as server:
