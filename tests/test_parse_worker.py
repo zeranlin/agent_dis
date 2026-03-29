@@ -16,7 +16,7 @@ from app.result_aggregator import build_report_markdown
 from app.repository import JsonRepository
 from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
-from app.review_executor import ReviewExecutor
+from app.review_executor import ReviewExecutor, _build_batch_payload
 from app.upload_service import UploadFile, UploadService
 from app.worker_runner import WorkerRunner
 from tests.llm_test_support import fake_llm_environment
@@ -507,8 +507,51 @@ class ParseWorkerTestCase(unittest.TestCase):
 
         self.assertEqual(len(rules), 12)
         self.assertEqual(rules[0]["rule_code"], "R1")
+        self.assertIn("hit_definition", rules[0])
+        self.assertIn("positive_examples", rules[0])
         self.assertEqual(prompt.version, "v1")
         self.assertIn("政府采购招标文件合规审查智能体", prompt.content_text)
+        self.assertIn("优先关注高价值风险规则", prompt.content_text)
+
+    def test_build_batch_payload_keeps_rule_guidance_fields(self):
+        class RuntimeInputStub:
+            task_id = "task_demo"
+            document_id = "document_demo"
+            file_name = "demo.docx"
+            rules = [
+                {
+                    "rule_code": "R5",
+                    "rule_name": "品牌/型号指向检查",
+                    "risk_level": "高",
+                    "rule_domain": "公平竞争规则",
+                    "execution_level": "自动判定",
+                    "hit_definition": "直接要求同品牌或原厂时命中。",
+                    "positive_examples": ["提供同品牌主机。"],
+                    "negative_examples": ["说明可显示型号信息。"],
+                }
+            ]
+
+        payload = _build_batch_payload(
+            runtime_input=RuntimeInputStub(),
+            clause_batch=[
+                build_clause_record(
+                    clause_id="clause_demo",
+                    document_id="document_demo",
+                    chapter_id="chapter_demo",
+                    chapter_title="第四章 技术要求",
+                    clause_order=1,
+                    clause_text="提供与影像处理平台同品牌内窥镜主机。",
+                    location_label="第四章 技术要求 / 1.5.2 内窥镜控制单元",
+                    clause_type="条款片段",
+                )
+            ],
+            clause_max_chars=200,
+        )
+
+        self.assertEqual(payload["rules"][0]["rule_code"], "R5")
+        self.assertIn("hit_definition", payload["rules"][0])
+        self.assertIn("positive_examples", payload["rules"][0])
+        self.assertIn("优先检查 R1、R3、R5、R9、R12", payload["review_requirements"][1])
 
     def test_review_input_assembler_builds_runtime_input(self):
         root_dir = Path(__file__).resolve().parent.parent

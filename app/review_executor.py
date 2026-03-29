@@ -140,13 +140,7 @@ def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], c
             "file_name": runtime_input.file_name,
         },
         "rules": [
-            {
-                "rule_code": rule["rule_code"],
-                "rule_name": rule["rule_name"],
-                "risk_level": rule["risk_level"],
-                "rule_domain": rule["rule_domain"],
-                "execution_level": rule["execution_level"],
-            }
+            dict(rule)
             for rule in runtime_input.rules
         ],
         "clauses": [
@@ -173,11 +167,15 @@ def _build_batch_payload(*, runtime_input: object, clause_batch: list[object], c
             ],
         },
         "review_requirements": [
+            "严格参考规则对象中的命中定义、正例、反例和重点关注项。",
+            "优先检查 R1、R3、R5、R9、R12 等高价值规则。",
+            "遇到同品牌、原厂保修、厂家认证讲师、执业医师证、评分量化不足等高价值表述时优先判断。",
             "仅在证据足以支撑时输出 findings。",
             "没有命中时返回 {\"findings\":[]}。",
             "risk_level 只能填写 高、中、低。",
             "need_human_confirm 只能填写 true 或 false。",
             "evidence_text 必须来自给定条款原文。",
+            "同一条款同一规则只输出一次，不要用近义理由重复输出。",
         ],
     }
 
