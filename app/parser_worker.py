@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -43,6 +44,7 @@ class ParseWorker:
             chapter_payloads: dict[str, dict[str, object]] = {}
             clause_count = 0
             section_count = 0
+            seen_clause_texts: set[str] = set()
 
             for block in parsed_document_payload.blocks:
                 self.repository.save_block(
@@ -85,22 +87,27 @@ class ParseWorker:
 
                 chapter_payload = chapter_payloads[parent_chapter_id]
                 chapter_payload["text_lines"].append(block.text)
-                clause_count += 1
                 chapter_title = str(chapter_payload["chapter_title"])
-                location_anchor = block.source_anchor or block.title or f"片段{block.order_index}"
                 clause_type = "条款片段" if block.block_type == "clause" else "段落片段"
-                self.repository.save_clause(
-                    build_clause_record(
-                        clause_id=f"clause_{uuid4().hex[:12]}",
-                        document_id=document.document_id,
-                        chapter_id=parent_chapter_id,
-                        chapter_title=chapter_title,
-                        clause_order=block.order_index,
-                        clause_text=block.text,
-                        location_label=f"{chapter_title} / {location_anchor}",
-                        clause_type=clause_type,
+                clause_slices = _build_reviewable_clause_slices(block=block)
+                for slice_index, clause_slice in enumerate(clause_slices, start=1):
+                    normalized_text = _normalize_clause_text(clause_slice["text"])
+                    if not normalized_text or normalized_text in seen_clause_texts:
+                        continue
+                    seen_clause_texts.add(normalized_text)
+                    clause_count += 1
+                    self.repository.save_clause(
+                        build_clause_record(
+                            clause_id=f"clause_{uuid4().hex[:12]}",
+                            document_id=document.document_id,
+                            chapter_id=parent_chapter_id,
+                            chapter_title=chapter_title,
+                            clause_order=(block.order_index * 100) + slice_index,
+                            clause_text=clause_slice["text"],
+                            location_label=f"{chapter_title} / {clause_slice['anchor']}",
+                            clause_type=clause_type,
+                        )
                     )
-                )
 
             for chapter_id, chapter_payload in chapter_payloads.items():
                 chapter_text = "\n".join(
@@ -142,3 +149,113 @@ class ParseWorker:
             self.repository.save_task(task)
         finally:
             self.repository.delete_parse_job(job_path)
+
+
+SUBITEM_PATTERN = re.compile(r"^(?:\(?\d+\)?[、.)]|[（(]\d+[)）]|[（(][一二三四五六七八九十]+[)）]|[a-zA-Z][、.)])")
+SHORT_ANCHOR_MAX_LEN = 48
+LONG_CLAUSE_THRESHOLD = 280
+LONG_SEGMENT_THRESHOLD = 90
+PIPE_SPLIT_PATTERN = re.compile(r"\s*\|\s*")
+
+
+def _normalize_clause_text(text: str) -> str:
+    return re.sub(r"\s+", "", str(text))
+
+
+def _build_reviewable_clause_slices(*, block: object) -> list[dict[str, str]]:
+    text = str(block.text).strip()
+    anchor = _build_location_anchor(block.source_anchor or block.title or f"片段{block.order_index}")
+    if not text:
+        return []
+
+    if block.block_type != "clause":
+        return [{"anchor": anchor, "text": text}]
+
+    segments = _split_long_clause_text(text)
+    if len(segments) <= 1:
+        return [{"anchor": anchor, "text": text}]
+
+    slices: list[dict[str, str]] = []
+    for index, segment in enumerate(segments, start=1):
+        segment_anchor = anchor if index == 1 else f"{anchor}（片段{index}）"
+        slices.append({"anchor": segment_anchor, "text": segment})
+    return slices
+
+
+def _build_location_anchor(raw_anchor: str) -> str:
+    anchor = str(raw_anchor).replace("\n", " ").strip()
+    if not anchor:
+        return "片段"
+
+    if "|" in anchor:
+        parts = [part.strip() for part in PIPE_SPLIT_PATTERN.split(anchor) if part.strip()]
+        meaningful_parts = [part for part in parts if len(part) > 1]
+        if meaningful_parts:
+            anchor = " / ".join(meaningful_parts[:2])
+        elif parts:
+            anchor = parts[0]
+
+    anchor = re.sub(r"\s+", " ", anchor)
+    if len(anchor) <= SHORT_ANCHOR_MAX_LEN:
+        return anchor
+    return f"{anchor[:SHORT_ANCHOR_MAX_LEN].rstrip()}..."
+
+
+def _split_long_clause_text(text: str) -> list[str]:
+    normalized_text = str(text).strip()
+    pipe_segments = [part.strip() for part in PIPE_SPLIT_PATTERN.split(normalized_text) if part.strip()]
+    should_force_split = len(pipe_segments) >= 4 and len(normalized_text) >= 140
+    if len(normalized_text) <= LONG_CLAUSE_THRESHOLD and not should_force_split:
+        return [normalized_text]
+
+    lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+    heading = lines[0] if len(lines) > 1 else ""
+    remainder = lines[1:] if len(lines) > 1 else [normalized_text]
+    if not remainder:
+        remainder = [normalized_text]
+
+    units: list[str] = []
+    for line in remainder:
+        pipe_parts = [part.strip() for part in PIPE_SPLIT_PATTERN.split(line) if part.strip()]
+        if len(pipe_parts) >= 3:
+            units.extend(pipe_parts)
+            continue
+        units.append(line)
+
+    grouped_units: list[str] = []
+    current_parts: list[str] = []
+    for unit in units:
+        candidate = " ".join(current_parts + [unit]).strip()
+        should_break = (
+            current_parts
+            and (
+                SUBITEM_PATTERN.match(unit)
+                or len(candidate) > LONG_CLAUSE_THRESHOLD
+                or (len(current_parts[-1]) >= LONG_SEGMENT_THRESHOLD and len(unit) >= LONG_SEGMENT_THRESHOLD)
+            )
+        )
+        if should_break:
+            grouped_units.append(" ".join(current_parts).strip())
+            current_parts = [unit]
+        else:
+            current_parts.append(unit)
+    if current_parts:
+        grouped_units.append(" ".join(current_parts).strip())
+
+    if len(grouped_units) <= 1:
+        return [normalized_text]
+
+    slices: list[str] = []
+    for unit in grouped_units:
+        if len(unit) < 20:
+            if slices:
+                slices[-1] = f"{slices[-1]} {unit}".strip()
+            else:
+                slices.append(f"{heading} {unit}".strip())
+            continue
+        if heading:
+            slices.append(f"{heading}\n{unit}".strip())
+        else:
+            slices.append(unit)
+
+    return slices or [normalized_text]

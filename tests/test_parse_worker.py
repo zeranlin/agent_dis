@@ -516,6 +516,62 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("条款片段", clause_types)
             self.assertTrue(all(title == "第一章 资格要求" for title in clause_chapter_titles))
 
+    def test_parse_worker_suppresses_exact_duplicate_clauses(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 技术要求",
+                            "1.1 产品参数",
+                            "内窥镜主机须支持高清成像。",
+                            "1.1 产品参数",
+                            "内窥镜主机须支持高清成像。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            matched = [clause for clause in clauses if "内窥镜主机须支持高清成像。" in clause.clause_text]
+
+            self.assertEqual(len(matched), 1)
+
+    def test_parse_worker_splits_long_clause_into_reviewable_slices(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 评分办法",
+                            "1.1 评分标准",
+                            "（一）评分内容：投标人具有 ISO9001 质量管理体系认证证书。|（二）评分内容：投标人具有 ISO14001 环境管理体系认证证书。|（三）评分内容：投标人具有 ISO45001 职业健康安全管理体系认证证书。|（四）评分内容：投标人须提供具有 CMA 标识的检测报告。|（五）评分依据：以上资料均要求提供扫描件。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            score_clauses = [clause for clause in clauses if clause.location_label.startswith("第一章 评分办法 / 1.1 评分标准")]
+
+            self.assertGreaterEqual(len(score_clauses), 2)
+            self.assertTrue(any("片段2" in clause.location_label for clause in score_clauses))
+            self.assertTrue(all(len(clause.location_label) < 80 for clause in score_clauses))
+
     def test_review_input_assembler_keeps_clause_type_and_chapter_context(self):
         root_dir = Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory() as runtime_dir:
