@@ -109,6 +109,7 @@ class ParseWorker:
                         chapter_title=chapter_title,
                         block_title=str(block.title),
                         source_anchor=str(clause_slice["anchor"]),
+                        context_text="\n".join(str(line) for line in chapter_payload["text_lines"][-2:]),
                         text=clause_slice["text"],
                     )
                     self.repository.save_clause(
@@ -214,6 +215,11 @@ GENERIC_TABLE_HEADER_KEYWORDS = (
     "参数名称",
     "指标要求",
 )
+QUALIFICATION_REVIEW_TABLE_KEYWORDS = ("资格性审查表", "资格审查表")
+CONFORMITY_REVIEW_TABLE_KEYWORDS = ("符合性审查表", "符合性检查表")
+BUSINESS_REQUIREMENT_KEYWORDS = ("商务要求", "商务需求", "商务条款")
+POLICY_CLAUSE_KEYWORDS = ("中小企业", "节能", "环保", "绿色", "进口产品", "残疾人福利", "监狱企业")
+UNCERTAIN_REVIEW_KEYWORDS = ("特别警示条款", "风险知悉确认书")
 
 
 def _normalize_clause_text(text: str) -> str:
@@ -344,10 +350,11 @@ def _classify_review_unit(
     chapter_title: str,
     block_title: str,
     source_anchor: str,
+    context_text: str,
     text: str,
 ) -> tuple[str, str, str]:
     normalized_text = str(text)
-    combined_text = f"{chapter_title}\n{block_title}\n{normalized_text}"
+    combined_text = f"{chapter_title}\n{block_title}\n{context_text}\n{normalized_text}"
     is_table_row = any(marker in normalized_text for marker in TABLE_ROW_HINTS)
     unit_name = _extract_unit_name(
         clause_type=clause_type,
@@ -355,8 +362,44 @@ def _classify_review_unit(
         source_anchor=source_anchor,
         text=normalized_text,
     )
+    if _is_qualification_review_table(
+        chapter_title=chapter_title,
+        block_title=block_title,
+        text=normalized_text,
+    ):
+        return "表格行", "资格性审查表", unit_name
+
+    if _is_conformity_review_table(
+        chapter_title=chapter_title,
+        block_title=block_title,
+        text=normalized_text,
+    ):
+        return "表格行", "符合性审查表", unit_name
+
+    if _is_policy_clause(
+        chapter_title=chapter_title,
+        block_title=block_title,
+        text=normalized_text,
+        module_type=module_type,
+    ):
+        return "条款", "政策适用条款", unit_name
+
+    if _is_uncertain_review_object(
+        chapter_title=chapter_title,
+        block_title=block_title,
+        text=normalized_text,
+    ):
+        if is_table_row:
+            return "表格行", "不确定审查对象", unit_name
+        return "条款", "不确定审查对象", unit_name
 
     if any(keyword in combined_text for keyword in DEVIATION_KEYWORDS):
+        if _is_business_requirement_item(
+            chapter_title=chapter_title,
+            block_title=block_title,
+            text=normalized_text,
+        ):
+            return "偏离项", "商务要求项", unit_name
         return "偏离项", "单个偏离项", unit_name
 
     if module_type == "资格条件":
@@ -369,6 +412,12 @@ def _classify_review_unit(
         return "条款", "单条资格要求", unit_name
 
     if module_type == "采购需求":
+        if _is_business_requirement_item(
+            chapter_title=chapter_title,
+            block_title=block_title,
+            text=normalized_text,
+        ):
+            return "参数项", "商务要求项", unit_name
         if any(keyword in combined_text for keyword in PROCUREMENT_DELIVERY_KEYWORDS):
             return "参数项", "单条交付要求", unit_name
         if any(keyword in combined_text for keyword in PROCUREMENT_SERVICE_KEYWORDS):
@@ -389,6 +438,12 @@ def _classify_review_unit(
         return "评分项", "单个评分项", unit_name
 
     if module_type == "合同条款":
+        if _is_business_requirement_item(
+            chapter_title=chapter_title,
+            block_title=block_title,
+            text=normalized_text,
+        ):
+            return "合同项", "商务要求项", unit_name
         if any(keyword in combined_text for keyword in CONTRACT_PAYMENT_KEYWORDS):
             return "合同项", "付款条款", unit_name
         if any(keyword in combined_text for keyword in CONTRACT_ACCEPTANCE_KEYWORDS):
@@ -404,6 +459,35 @@ def _classify_review_unit(
     if is_table_row:
         return "表格行", "普通表格行", unit_name
     return "条款", "普通条款", unit_name
+
+
+def _is_qualification_review_table(*, chapter_title: str, block_title: str, text: str) -> bool:
+    combined_text = f"{chapter_title}\n{block_title}\n{text}"
+    return any(keyword in combined_text for keyword in QUALIFICATION_REVIEW_TABLE_KEYWORDS)
+
+
+def _is_conformity_review_table(*, chapter_title: str, block_title: str, text: str) -> bool:
+    combined_text = f"{chapter_title}\n{block_title}\n{text}"
+    return any(keyword in combined_text for keyword in CONFORMITY_REVIEW_TABLE_KEYWORDS)
+
+
+def _is_business_requirement_item(*, chapter_title: str, block_title: str, text: str) -> bool:
+    combined_text = f"{chapter_title}\n{block_title}\n{text}"
+    return any(keyword in combined_text for keyword in BUSINESS_REQUIREMENT_KEYWORDS)
+
+
+def _is_policy_clause(*, chapter_title: str, block_title: str, text: str, module_type: str) -> bool:
+    if module_type == "政策条款":
+        return True
+    combined_text = f"{chapter_title}\n{block_title}\n{text}"
+    return any(keyword in combined_text for keyword in POLICY_CLAUSE_KEYWORDS)
+
+
+def _is_uncertain_review_object(*, chapter_title: str, block_title: str, text: str) -> bool:
+    combined_text = f"{chapter_title}\n{block_title}\n{text}"
+    if chapter_title == "默认章节":
+        return True
+    return any(keyword in combined_text for keyword in UNCERTAIN_REVIEW_KEYWORDS)
 
 
 def _extract_unit_name(*, clause_type: str, block_title: str, source_anchor: str, text: str) -> str:

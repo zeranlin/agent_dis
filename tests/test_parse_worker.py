@@ -713,6 +713,120 @@ class ParseWorkerTestCase(unittest.TestCase):
 
             self.assertEqual(parameter_clause.unit_name, "图像分辨率")
 
+    def test_parse_worker_classifies_qualification_review_table(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_docx_with_table(
+                        ["招标文件信息", "资格性审查表", "以下内容用于资格审查。"],
+                        [["序号", "内容"], ["1", "投标人不符合资格要求，或未提交资格证明资料"]],
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_label == "资格性审查表" for clause in clauses))
+
+    def test_parse_worker_classifies_conformity_review_table(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_docx_with_table(
+                        ["招标文件信息", "符合性审查表", "以下内容用于符合性审查。"],
+                        [["序号", "内容"], ["1", "未按招标文件要求对实质性条款作出响应"]],
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_label == "符合性审查表" for clause in clauses))
+
+    def test_parse_worker_classifies_business_requirement_item(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第五章 商务要求",
+                            "1.1 免费保修期外售后服务要求",
+                            "投标人应按商务要求提供上门维护服务。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_label == "商务要求项" for clause in clauses))
+
+    def test_parse_worker_classifies_policy_clause(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第六章 政策适用",
+                            "1.1 中小企业政策",
+                            "本项目执行中小企业价格扣除政策。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_label == "政策适用条款" for clause in clauses))
+
+    def test_parse_worker_marks_default_chapter_content_as_uncertain_review_object(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="招标文件.docx",
+                    content=build_minimal_docx(
+                        [
+                            "特别警示条款",
+                            "供应商参与投标不得存在下列情形。",
+                            "1 | 与其他投标供应商存在关联关系。",
+                        ]
+                    ),
+                )
+            )
+
+            ParseWorker(repository).run_pending_jobs()
+
+            task = repository.get_task(upload_response["task_id"])
+            assert task is not None
+            clauses = repository.list_clauses_by_document(task.document_id)
+            self.assertTrue(any(clause.unit_label == "不确定审查对象" for clause in clauses))
+
     def test_review_input_assembler_keeps_clause_type_and_chapter_context(self):
         root_dir = Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory() as runtime_dir:
