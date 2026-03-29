@@ -2,17 +2,17 @@
 
 ## 当前阶段
 
-- `LLM V1` 精度优化主线已阶段性收口，当前首轮验收验证已完成并发现阻塞性交付缺口
+- `LLM V1` 首轮验收验证已发现阻塞性交付缺口，当前进入真实执行稳定性修复
 
 ## 当前唯一目标
 
-- 在不扩 V1 范围的前提下，围绕真实样例和页面闭环确认阻塞原因，并等待总负责人拍板是否切回稳定性修复
+- 在不扩 V1 范围的前提下，解除真实 `LLM` 审查执行阶段 `HTTP 504` 阻塞，让正常样例重新稳定进入 `completed`
 
 ## 当前要看什么
 
 1. `docs/status/summary.md`
 2. `docs/comms/inbox-t.md`
-3. `docs/tech/v1/long-clause-splitting-round-1.md`
+3. `docs/tech/v1/llm-v1-acceptance-validation-round-1.md`
 4. 必要时再读 `docs/tasks/current.md`
 5. 需要复盘时再读 `docs/tasks/archive/`
 
@@ -85,6 +85,9 @@
 - 当前正式结论：
 - 本轮验收不通过，存在阻塞性交付缺口
 - 当前已通过 `docs/comms/inbox-owner.md` 提交拍板请求
+- 当前已正式切回“真实 LLM 审查执行稳定性修复”：
+- 优先方向是联调服务与调用参数侧排查、最小重试、超时与缩批策略收口
+- 目标不是继续做精度优化，而是恢复正常样例稳定进入 `completed`
 - 平时优先维护本文件，完成一轮实现并准备回提时再更新 `docs/tasks/current.md`
 - 当前不继续扩页面、不补零散优化
 - 当前不继续回头补提示词规则
