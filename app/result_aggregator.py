@@ -92,8 +92,10 @@ def _summarize_focus_areas(risk_groups: list[dict[str, object]]) -> str:
         rule_code = str(group.get("rule_code") or "")
         title = str(group.get("risk_title") or "")
         unit_label = str(group.get("unit_label") or "")
-        if rule_code == "R12" and "付款" in title + unit_label:
+        if rule_code == "R12" and any(keyword in title + unit_label for keyword in ("付款", "回款")):
             area = "合同付款条款"
+        elif rule_code == "R12" and any(keyword in title for keyword in ("违约责任", "单方解除", "履约评价", "验收")):
+            area = "合同履约条款"
         elif rule_code == "R9":
             area = "评分细则"
         else:

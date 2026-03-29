@@ -109,6 +109,27 @@ def _normalize_rule_code(rule_id: str) -> str:
     return text
 
 
+def _build_contract_risk_title(*, unit_label: str, unit_name: str, evidence_text: str) -> str:
+    combined_text = "\n".join(
+        part
+        for part in (unit_label, unit_name, evidence_text)
+        if str(part).strip()
+    )
+    if any(keyword in combined_text for keyword in ("退还", "扣除", "补足", "审定金额")):
+        return "审定金额核减后责任单方加重，存在合同失衡风险"
+    if any(keyword in combined_text for keyword in ("30% 的违约金", "30%的违约金", "赔偿", "违约金")):
+        return "违约责任明显偏重，存在合同失衡风险"
+    if "单方解除" in combined_text and "不承担任何违约责任" in combined_text:
+        return "单方解除且免责，存在合同责任失衡风险"
+    if any(keyword in combined_text for keyword in ("评分为 80", "支付对应阶段款", "履约评价", "不予支付")):
+        return "履约评价直接决定付款比例，存在责任失衡风险"
+    if any(keyword in combined_text for keyword in ("检测", "验收", "工作日内")):
+        return "检测或验收条款缺少关键时限，建议人工复核"
+    if any(keyword in combined_text for keyword in ("财政", "据实支付", "初验款", "终验款", "付款", "支付")):
+        return "付款条件与财政资金挂钩，存在回款责任失衡风险"
+    return "合同条款存在责任失衡风险"
+
+
 def _extract_focus_summary(risk_groups: list[dict[str, object]]) -> str:
     focus_titles = _unique_texts([str(group.get("risk_title") or "") for group in risk_groups], limit=3)
     if not focus_titles:
@@ -162,16 +183,22 @@ def _normalize_risk_title(*, rule_code: str, risk_title: str, unit_label: str, u
         if str(part).strip()
     )
     if rule_code == "R12":
-        if any(keyword in combined_text for keyword in ("财政", "据实支付", "初验款", "终验款", "付款", "支付")):
-            return "付款条件与财政资金挂钩，存在回款责任失衡风险"
-        if "单方解除" in combined_text and "不承担任何违约责任" in combined_text:
-            return "单方解除且免责，存在合同责任失衡风险"
-        if any(keyword in combined_text for keyword in ("检测", "验收", "费用承担")):
-            return "检测或验收责任分配失衡，建议人工复核"
-        return "合同条款存在责任失衡风险"
+        return _build_contract_risk_title(
+            unit_label=unit_label,
+            unit_name=unit_name,
+            evidence_text=evidence_text,
+        )
     if rule_code == "R9":
         return "评分标准量化不足，自由裁量空间较大"
     return title
+
+
+def _normalize_unit_label(*, rule_code: str, raw_unit_label: str, unit_name: str, chapter_title: str) -> str:
+    if rule_code == "R9" and raw_unit_label == "不确定审查对象" and unit_name:
+        return _format_unit_display(unit_label="单个评分项", unit_name=unit_name)
+    if rule_code == "R12" and raw_unit_label.startswith("单条技术参数") and "合同" in chapter_title:
+        return _format_unit_display(unit_label="单条合同条款", unit_name=unit_name)
+    return _format_unit_display(unit_label=raw_unit_label, unit_name=unit_name)
 
 
 def group_risks(
@@ -219,7 +246,13 @@ def group_risks(
             or "未标注"
         )
         unit_name = str(getattr(clause, "unit_name", "")).strip()
-        unit_label = _format_unit_display(unit_label=raw_unit_label, unit_name=unit_name)
+        rule_code = _normalize_rule_code(representative.rule_id)
+        unit_label = _normalize_unit_label(
+            rule_code=rule_code,
+            raw_unit_label=raw_unit_label,
+            unit_name=unit_name,
+            chapter_title=chapter_title,
+        )
         location_label = (
             str(getattr(clause, "location_label", "")).strip()
             or str(representative.location_label)
@@ -229,7 +262,7 @@ def group_risks(
             fallback="无",
         )
         risk_title = _normalize_risk_title(
-            rule_code=_normalize_rule_code(representative.rule_id),
+            rule_code=rule_code,
             risk_title=str(representative.risk_title),
             unit_label=raw_unit_label,
             unit_name=unit_name,
@@ -242,7 +275,7 @@ def group_risks(
                 "raw_risk_title": representative.risk_title,
                 "risk_level": representative.risk_level,
                 "rule_id": representative.rule_id,
-                "rule_code": _normalize_rule_code(representative.rule_id),
+                "rule_code": rule_code,
                 "rule_domain": representative.rule_domain,
                 "location_label": _normalize_location_label(location_label),
                 "chapter_title": _normalize_chapter_title(chapter_title),

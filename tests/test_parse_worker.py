@@ -307,6 +307,159 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertIn("合同付款条款和评分细则", conclusion)
         self.assertNotIn("品牌指向", conclusion)
 
+    def test_group_risks_distinguishes_contract_risk_titles_by_evidence(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            clause_payment = build_clause_record(
+                clause_id="clause_payment",
+                document_id="document_001",
+                chapter_id="chapter_001",
+                chapter_title="第九章 合同条款",
+                clause_order=1,
+                clause_text="因财政下达资金情况无法明确，终验款将按照财政向甲方下达的项目资金情况进行据实支付。",
+                location_label="第九章 合同条款 / 第四条 终验阶段",
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="付款条款",
+                unit_name="第四条 终验阶段",
+                clause_type="条款片段",
+            )
+            clause_penalty = build_clause_record(
+                clause_id="clause_penalty",
+                document_id="document_001",
+                chapter_id="chapter_001",
+                chapter_title="第九章 合同条款",
+                clause_order=2,
+                clause_text="乙方应当赔偿损失，并向甲方支付合同总额30%的违约金。",
+                location_label="第九章 合同条款 / 违约责任",
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="违约责任条款",
+                unit_name="违约责任",
+                clause_type="条款片段",
+            )
+            repository.save_clause(clause_payment)
+            repository.save_clause(clause_penalty)
+
+            payment_risk = build_risk_item_record(
+                risk_id="risk_payment",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_payment",
+                rule={
+                    "rule_id": "rule_v1_r12",
+                    "rule_name": "关键条款缺失/责任失衡检查",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "合同与履约风险规则",
+                    "file_module": "合同条款",
+                },
+                location_label=clause_payment.location_label,
+                risk_description="付款责任失衡。",
+                review_reasoning="模型判断付款条件受财政下达资金影响。",
+                risk_title="关键条款缺失/责任失衡检查",
+            )
+            penalty_risk = build_risk_item_record(
+                risk_id="risk_penalty",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_penalty",
+                rule={
+                    "rule_id": "rule_v1_r12",
+                    "rule_name": "关键条款缺失/责任失衡检查",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "合同与履约风险规则",
+                    "file_module": "合同条款",
+                },
+                location_label=clause_penalty.location_label,
+                risk_description="违约责任偏重。",
+                review_reasoning="模型判断违约责任明显偏重。",
+                risk_title="关键条款缺失/责任失衡检查",
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_payment",
+                    risk_id="risk_payment",
+                    document_id="document_001",
+                    clause_id="clause_payment",
+                    quoted_text="终验款将按照财政向甲方下达的项目资金情况进行据实支付。",
+                    location_label=clause_payment.location_label,
+                    evidence_note="付款条款证据。",
+                )
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_penalty",
+                    risk_id="risk_penalty",
+                    document_id="document_001",
+                    clause_id="clause_penalty",
+                    quoted_text="向甲方支付合同总额30%的违约金。",
+                    location_label=clause_penalty.location_label,
+                    evidence_note="违约责任条款证据。",
+                )
+            )
+
+            risk_groups = group_risks(risks=[payment_risk, penalty_risk], repository=repository)
+
+            self.assertEqual(risk_groups[0]["risk_title"], "付款条件与财政资金挂钩，存在回款责任失衡风险")
+            self.assertEqual(risk_groups[1]["risk_title"], "违约责任明显偏重，存在合同失衡风险")
+
+    def test_group_risks_refines_uncertain_r9_unit_label(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            clause = build_clause_record(
+                clause_id="clause_score",
+                document_id="document_001",
+                chapter_id="chapter_001",
+                chapter_title="第五章 评分办法",
+                clause_order=1,
+                clause_text="①评审为优的最高得40分；②评审为良的最高得20分。",
+                location_label="第五章 评分办法 / 售后服务及培训方案评价",
+                module_type="其他",
+                unit_type="条款",
+                unit_label="不确定审查对象",
+                unit_name="售后服务及培训方案评价",
+                clause_type="条款片段",
+            )
+            repository.save_clause(clause)
+            risk = build_risk_item_record(
+                risk_id="risk_score",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_score",
+                rule={
+                    "rule_id": "rule_v1_r9",
+                    "rule_name": "评分项未量化检查",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "评审可解释性规则",
+                    "file_module": "评分办法",
+                },
+                location_label=clause.location_label,
+                risk_description="评分标准量化不足。",
+                review_reasoning="模型判断评分标准存在自由裁量空间。",
+                risk_title="评分标准量化不足，存在自由裁量权过大风险",
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_score",
+                    risk_id="risk_score",
+                    document_id="document_001",
+                    clause_id="clause_score",
+                    quoted_text="①评审为优的最高得40分；②评审为良的最高得20分。",
+                    location_label=clause.location_label,
+                    evidence_note="评分项证据。",
+                )
+            )
+
+            risk_groups = group_risks(risks=[risk], repository=repository)
+
+            self.assertEqual(risk_groups[0]["unit_label"], "单个评分项（售后服务及培训方案评价）")
+
     def test_group_risks_merges_same_clause_and_rule_duplicates(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             repository = JsonRepository(Path(runtime_dir))
