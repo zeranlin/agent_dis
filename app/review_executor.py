@@ -547,6 +547,7 @@ def _score_clause_candidate(
     score += min(len(modules), 2)
     if clause_id in preferred_clause_ids:
         score += 4
+    score += _score_clause_explicit_priority(clause=clause)
 
     matched_high_priority = 0
     matched_normal_priority = 0
@@ -565,6 +566,29 @@ def _score_clause_candidate(
     text_length = len(clause_text.strip())
     if 40 <= text_length <= 800:
         score += 1
+    return score
+
+
+def _score_clause_explicit_priority(*, clause: object) -> int:
+    score = 0
+    if _has_explicit_r4_signal(clause):
+        score += 10
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    normalized_text = _normalize_for_match(
+        "\n".join(
+            [
+                str(getattr(clause, "chapter_title", "")),
+                str(getattr(clause, "unit_name", "")),
+                clause_text,
+            ]
+        )
+    )
+    if any(keyword in normalized_text for keyword in map(_normalize_for_match, QUALIFICATION_CERT_OR_CREDIT_KEYWORDS)):
+        score += 8
+    elif YEAR_LIMIT_PATTERN.search(clause_text):
+        score += 7
+    if any(keyword in clause_text for keyword in ("评标基准价", "算术平均价", "平均价")):
+        score += 7
     return score
 
 

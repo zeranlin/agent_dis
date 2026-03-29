@@ -2409,6 +2409,76 @@ class ParseWorkerTestCase(unittest.TestCase):
 
         self.assertEqual([clause.clause_id for clause in mapping["R4"][:2]], ["r4_real_uncertain", "r4_boilerplate"])
 
+    def test_select_candidate_clauses_keeps_explicit_r4_signal_under_global_limit(self):
+        rules = [
+            {
+                "rule_code": "R4",
+                "rule_name": "业绩要求定向检查",
+                "rule_domain": "公平竞争规则",
+                "hit_definition": "资格业绩要求存在区域或数量定向风险时命中。",
+                "focus_terms": ["同类项目业绩不少于", "深圳市"],
+                "positive_examples": ["投标人须具备深圳市医疗器械行业同类项目业绩不少于2个。"],
+            }
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="r4_real_uncertain",
+                document_id="d1",
+                chapter_id="c1",
+                chapter_title="五、风险知悉确认书",
+                clause_order=1,
+                clause_text="投标人须具备深圳市医疗器械行业同类项目业绩不少于2个（提供合同扫描件）。",
+                location_label="五、风险知悉确认书 / 14.投标人须具备深圳市医疗器械行业同类项目业绩不少于2个",
+                module_type="程序条款",
+                unit_type="条款",
+                unit_label="不确定审查对象",
+                unit_name="14.投标人须具备深圳市医疗器械行业同类项目业绩不少于2个",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="boilerplate_1",
+                document_id="d1",
+                chapter_id="c2",
+                chapter_title="十一、合同生效及其他",
+                clause_order=2,
+                clause_text="综合评分法，是指在满足招标文件全部实质性要求的前提下，按照招标文件中规定的各项因素进行综合评审。",
+                location_label="十一、合同生效及其他 / 37.1.2 综合评分法",
+                module_type="评分办法",
+                unit_type="评分项",
+                unit_label="单个评分项",
+                unit_name="综合评分法",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="boilerplate_2",
+                document_id="d1",
+                chapter_id="c3",
+                chapter_title="十一、合同生效及其他",
+                clause_order=3,
+                clause_text="评审结果汇总完成后，除下列情形外，任何人不得修改评审结果。",
+                location_label="十一、合同生效及其他 / 37.3 重新评审的情形",
+                module_type="评分办法",
+                unit_type="评分项",
+                unit_label="单个评分项",
+                unit_name="重新评审的情形",
+                clause_type="条款片段",
+            ),
+        ]
+
+        rule_candidate_map = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+        selected = _select_candidate_clauses(
+            clauses=clauses,
+            rules=rules,
+            rule_candidate_map=rule_candidate_map,
+            max_clauses=1,
+        )
+
+        self.assertEqual([clause.clause_id for clause in selected], ["r4_real_uncertain"])
+
     def test_review_executor_filters_r5_noise_findings_before_persist(self):
         class NoiseClient:
             max_clauses = 20
