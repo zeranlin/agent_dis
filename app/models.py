@@ -382,6 +382,8 @@ def build_risk_item_record(
     location_label: str,
     risk_description: str,
     review_reasoning: str,
+    risk_title: str | None = None,
+    risk_level: str | None = None,
 ) -> RiskItemRecord:
     file_module = rule.get("file_module", "")
     if isinstance(file_module, list):
@@ -393,8 +395,8 @@ def build_risk_item_record(
         document_id=document_id,
         clause_id=clause_id,
         rule_id=str(rule["rule_id"]),
-        risk_title=str(rule["rule_name"]),
-        risk_level=str(rule["risk_level"]),
+        risk_title=risk_title or str(rule["rule_name"]),
+        risk_level=risk_level or str(rule["risk_level"]),
         execution_level=str(rule["execution_level"]),
         rule_domain=str(rule["rule_domain"]),
         file_module=str(file_module),

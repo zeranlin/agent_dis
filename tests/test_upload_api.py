@@ -14,6 +14,7 @@ from app.repository import JsonRepository
 from app.server import ReviewHTTPServer, create_service
 from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService
 from app.worker_runner import WorkerRunner
+from tests.llm_test_support import fake_llm_environment
 
 
 def build_multipart_body(boundary: str, filename: str, content: bytes) -> bytes:
@@ -41,11 +42,17 @@ class TestServerContext:
 
         self.previous_runtime_dir = os.environ.get("AGENT_DIS_RUNTIME_DIR")
         os.environ["AGENT_DIS_RUNTIME_DIR"] = self.temp_dir.name
-        service = create_service()
-        self.server = ReviewHTTPServer(("127.0.0.1", 0), service)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        return self
+        self.llm_env = fake_llm_environment()
+        self.llm_env.__enter__()
+        try:
+            service = create_service()
+            self.server = ReviewHTTPServer(("127.0.0.1", 0), service)
+            self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+            self.thread.start()
+            return self
+        except Exception:
+            self.llm_env.__exit__(None, None, None)
+            raise
 
     def __exit__(self, exc_type, exc, tb):
         import os
@@ -53,6 +60,7 @@ class TestServerContext:
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        self.llm_env.__exit__(exc_type, exc, tb)
         if self.previous_runtime_dir is None:
             os.environ.pop("AGENT_DIS_RUNTIME_DIR", None)
         else:
@@ -215,7 +223,7 @@ class UploadApiTestCase(unittest.TestCase):
             self.assertEqual(failed_payload["support_notes"][0]["title"], "交付说明")
 
     def test_result_page_payload_keeps_canonical_result_fields(self):
-        with tempfile.TemporaryDirectory() as runtime_dir:
+        with tempfile.TemporaryDirectory() as runtime_dir, fake_llm_environment():
             repository = JsonRepository(Path(runtime_dir))
             service = UploadService(repository)
             upload_response = service.create_review_task(
