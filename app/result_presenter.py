@@ -101,6 +101,20 @@ def _format_unit_display(*, unit_label: str, unit_name: str) -> str:
     return f"{label}（{name}）"
 
 
+def _normalize_unit_name(unit_name: str) -> str:
+    text = str(unit_name).strip()
+    if not text:
+        return ""
+    if "|" in text:
+        parts = [part.strip() for part in text.split("|") if part.strip()]
+        if len(parts) >= 2:
+            for part in parts:
+                if any(keyword in part for keyword in ("评价", "评分", "方案", "阶段", "条款")):
+                    return part
+            return parts[1]
+    return text
+
+
 def _normalize_rule_code(rule_id: str) -> str:
     text = str(rule_id).strip()
     matched = re.search(r"R\d+", text, re.IGNORECASE)
@@ -193,12 +207,45 @@ def _normalize_risk_title(*, rule_code: str, risk_title: str, unit_label: str, u
     return title
 
 
-def _normalize_unit_label(*, rule_code: str, raw_unit_label: str, unit_name: str, chapter_title: str) -> str:
-    if rule_code == "R9" and raw_unit_label == "不确定审查对象" and unit_name:
-        return _format_unit_display(unit_label="单个评分项", unit_name=unit_name)
-    if rule_code == "R12" and raw_unit_label.startswith("单条技术参数") and "合同" in chapter_title:
-        return _format_unit_display(unit_label="单条合同条款", unit_name=unit_name)
-    return _format_unit_display(unit_label=raw_unit_label, unit_name=unit_name)
+def _normalize_unit_label(
+    *,
+    rule_code: str,
+    raw_unit_label: str,
+    unit_name: str,
+    chapter_title: str,
+    risk_title: str,
+    evidence_text: str,
+) -> str:
+    normalized_name = _normalize_unit_name(unit_name)
+    if rule_code == "R9" and raw_unit_label == "不确定审查对象" and normalized_name:
+        return _format_unit_display(unit_label="单个评分项", unit_name=normalized_name)
+    if rule_code == "R12":
+        combined_text = "\n".join(
+            part
+            for part in (raw_unit_label, normalized_name, chapter_title, risk_title, evidence_text)
+            if str(part).strip()
+        )
+        if any(keyword in risk_title for keyword in ("付款", "回款")):
+            return _format_unit_display(unit_label="付款条款", unit_name=normalized_name)
+        if "单方解除" in risk_title:
+            return _format_unit_display(unit_label="单条合同条款", unit_name=normalized_name)
+        if any(keyword in risk_title for keyword in ("履约评价", "付款比例")):
+            return _format_unit_display(unit_label="单条合同条款", unit_name=normalized_name)
+        if any(keyword in risk_title for keyword in ("检测", "验收")):
+            return _format_unit_display(unit_label="验收条款", unit_name=normalized_name)
+        if any(keyword in risk_title for keyword in ("违约责任", "违约")):
+            return _format_unit_display(unit_label="违约责任条款", unit_name=normalized_name)
+        if raw_unit_label.startswith("单条技术参数") and "合同" in chapter_title:
+            return _format_unit_display(unit_label="单条合同条款", unit_name=normalized_name)
+        if any(keyword in combined_text for keyword in ("解除合同", "单方解除")):
+            return _format_unit_display(unit_label="单条合同条款", unit_name=normalized_name)
+        if any(keyword in combined_text for keyword in ("履约评价", "评分为 80", "支付对应阶段款")):
+            return _format_unit_display(unit_label="单条合同条款", unit_name=normalized_name)
+        if any(keyword in combined_text for keyword in ("检测", "验收")):
+            return _format_unit_display(unit_label="验收条款", unit_name=normalized_name)
+        if any(keyword in combined_text for keyword in ("违约", "违约责任")):
+            return _format_unit_display(unit_label="违约责任条款", unit_name=normalized_name)
+    return _format_unit_display(unit_label=raw_unit_label, unit_name=normalized_name)
 
 
 def group_risks(
@@ -245,28 +292,30 @@ def group_risks(
             or extract_unit_label(representative.review_reasoning)
             or "未标注"
         )
-        unit_name = str(getattr(clause, "unit_name", "")).strip()
-        rule_code = _normalize_rule_code(representative.rule_id)
-        unit_label = _normalize_unit_label(
-            rule_code=rule_code,
-            raw_unit_label=raw_unit_label,
-            unit_name=unit_name,
-            chapter_title=chapter_title,
-        )
-        location_label = (
-            str(getattr(clause, "location_label", "")).strip()
-            or str(representative.location_label)
-        )
         evidence_text = merge_texts(
             [str(item.quoted_text) for item in merged_evidences],
             fallback="无",
         )
+        unit_name = str(getattr(clause, "unit_name", "")).strip()
+        rule_code = _normalize_rule_code(representative.rule_id)
         risk_title = _normalize_risk_title(
             rule_code=rule_code,
             risk_title=str(representative.risk_title),
             unit_label=raw_unit_label,
             unit_name=unit_name,
             evidence_text=evidence_text,
+        )
+        unit_label = _normalize_unit_label(
+            rule_code=rule_code,
+            raw_unit_label=raw_unit_label,
+            unit_name=unit_name,
+            chapter_title=chapter_title,
+            risk_title=risk_title,
+            evidence_text=evidence_text,
+        )
+        location_label = (
+            str(getattr(clause, "location_label", "")).strip()
+            or str(representative.location_label)
         )
         groups.append(
             {

@@ -460,6 +460,59 @@ class ParseWorkerTestCase(unittest.TestCase):
 
             self.assertEqual(risk_groups[0]["unit_label"], "单个评分项（售后服务及培训方案评价）")
 
+    def test_group_risks_refines_r12_unit_label_by_contract_semantics(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            clause = build_clause_record(
+                clause_id="clause_contract_semantic",
+                document_id="document_001",
+                chapter_id="chapter_001",
+                chapter_title="第九章 合同条款",
+                clause_order=1,
+                clause_text="甲方有权单方解除合同，并不承担任何违约责任。",
+                location_label="第九章 合同条款 / 单方解除",
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="付款条款",
+                unit_name="如因政策原因导致合同不能履行或履行无意义的，甲方有权单方解除合同",
+                clause_type="条款片段",
+            )
+            repository.save_clause(clause)
+            risk = build_risk_item_record(
+                risk_id="risk_contract_semantic",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_contract_semantic",
+                rule={
+                    "rule_id": "rule_v1_r12",
+                    "rule_name": "关键条款缺失/责任失衡检查",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "合同与履约风险规则",
+                    "file_module": "合同条款",
+                },
+                location_label=clause.location_label,
+                risk_description="单方解除且免责。",
+                review_reasoning="模型判断甲方单方解除且免责。",
+                risk_title="关键条款缺失/责任失衡检查",
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_contract_semantic",
+                    risk_id="risk_contract_semantic",
+                    document_id="document_001",
+                    clause_id="clause_contract_semantic",
+                    quoted_text="甲方有权单方解除合同，并不承担任何违约责任。",
+                    location_label=clause.location_label,
+                    evidence_note="合同条款证据。",
+                )
+            )
+
+            risk_groups = group_risks(risks=[risk], repository=repository)
+
+            self.assertEqual(risk_groups[0]["unit_label"], "单条合同条款（如因政策原因导致合同不能履行或履行无意义的，甲方有权单方解除合同）")
+
     def test_group_risks_merges_same_clause_and_rule_duplicates(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             repository = JsonRepository(Path(runtime_dir))
