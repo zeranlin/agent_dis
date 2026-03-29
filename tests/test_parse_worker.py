@@ -18,6 +18,7 @@ from app.result_presenter import group_risks
 from app.repository import JsonRepository
 from app.result_aggregator import ResultAggregator
 from app.review_assembler import ReviewInputAssembler
+from app.result_aggregator import build_overall_conclusion
 from app.review_executor import (
     ReviewExecutor,
     _build_batch_payload,
@@ -222,6 +223,89 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("- 规则编号：rule_high", markdown)
             self.assertIn("### 风险组 1", markdown)
             self.assertIn("- 归并命中数：1", markdown)
+
+    def test_group_risks_polishes_titles_and_location_for_readability(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            clause = build_clause_record(
+                clause_id="clause_contract",
+                document_id="document_001",
+                chapter_id="chapter_001",
+                chapter_title=(
+                    "九、 合同文本要求按规定格式打印，大小为 A4 幅面（高 297 毫米，宽 210毫米），"
+                    "竖装。左边为装订边，正文内容所用字型应不小于 5 号字。"
+                ),
+                clause_order=1,
+                clause_text="因财政下达资金情况无法明确，终验款将按照财政向甲方下达的项目资金情况进行据实支付。",
+                location_label=(
+                    "九、 合同文本要求按规定格式打印，大小为 A4 幅面（高 297 毫米，宽 210毫米），"
+                    "竖装。左边为装订边，正文内容所用字型应不小于 5 号字。 / 第四条 终验阶段"
+                ),
+                module_type="合同条款",
+                unit_type="合同项",
+                unit_label="付款条款",
+                unit_name="第四条 终验阶段",
+                clause_type="条款片段",
+            )
+            repository.save_clause(clause)
+            risk = build_risk_item_record(
+                risk_id="risk_contract",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                clause_id="clause_contract",
+                rule={
+                    "rule_id": "rule_v1_r12",
+                    "rule_name": "关键条款缺失/责任失衡检查",
+                    "risk_level": "高",
+                    "execution_level": "自动判定",
+                    "rule_domain": "合同与履约风险规则",
+                    "file_module": "合同条款",
+                },
+                location_label=clause.location_label,
+                risk_description="合同条款疑似责任失衡。",
+                review_reasoning="模型判断合同付款义务与财政到款挂钩。",
+                risk_title="关键条款缺失/责任失衡检查",
+            )
+            repository.save_evidence(
+                build_evidence_item_record(
+                    evidence_id="evidence_contract",
+                    risk_id="risk_contract",
+                    document_id="document_001",
+                    clause_id="clause_contract",
+                    quoted_text="终验款将按照财政向甲方下达的项目资金情况进行据实支付。",
+                    location_label=clause.location_label,
+                    evidence_note="合同付款条款原文证据。",
+                )
+            )
+
+            risk_groups = group_risks(risks=[risk], repository=repository)
+
+            self.assertEqual(risk_groups[0]["risk_title"], "付款条件与财政资金挂钩，存在回款责任失衡风险")
+            self.assertIn("...", risk_groups[0]["location_label"])
+            self.assertIn("...", risk_groups[0]["chapter_title"])
+
+    def test_build_overall_conclusion_uses_current_focus_areas(self):
+        conclusion = build_overall_conclusion(
+            risk_groups=[
+                {
+                    "rule_code": "R12",
+                    "risk_title": "付款条件与财政资金挂钩，存在回款责任失衡风险",
+                    "unit_label": "付款条款",
+                },
+                {
+                    "rule_code": "R9",
+                    "risk_title": "评分标准量化不足，自由裁量空间较大",
+                    "unit_label": "单个评分项",
+                },
+            ],
+            risk_count_high=2,
+            risk_count_medium=0,
+            risk_count_low=0,
+        )
+
+        self.assertIn("合同付款条款和评分细则", conclusion)
+        self.assertNotIn("品牌指向", conclusion)
 
     def test_group_risks_merges_same_clause_and_rule_duplicates(self):
         with tempfile.TemporaryDirectory() as runtime_dir:

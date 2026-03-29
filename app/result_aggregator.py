@@ -36,6 +36,7 @@ class ResultAggregator:
             risk_count_low = risk_counts["low"]
 
             overall_conclusion = build_overall_conclusion(
+                risk_groups=risk_groups,
                 risk_count_high=risk_count_high,
                 risk_count_medium=risk_count_medium,
                 risk_count_low=risk_count_low,
@@ -85,11 +86,45 @@ class ResultAggregator:
             self.repository.delete_result_job(job_path)
 
 
-def build_overall_conclusion(*, risk_count_high: int, risk_count_medium: int, risk_count_low: int) -> str:
+def _summarize_focus_areas(risk_groups: list[dict[str, object]]) -> str:
+    focus_areas: list[str] = []
+    for group in risk_groups:
+        rule_code = str(group.get("rule_code") or "")
+        title = str(group.get("risk_title") or "")
+        unit_label = str(group.get("unit_label") or "")
+        if rule_code == "R12" and "付款" in title + unit_label:
+            area = "合同付款条款"
+        elif rule_code == "R9":
+            area = "评分细则"
+        else:
+            area = unit_label or title
+        if area and area not in focus_areas:
+            focus_areas.append(area)
+        if len(focus_areas) >= 2:
+            break
+    if not focus_areas:
+        return ""
+    if len(focus_areas) == 1:
+        return focus_areas[0]
+    return f"{focus_areas[0]}和{focus_areas[1]}"
+
+
+def build_overall_conclusion(
+    *,
+    risk_groups: list[dict[str, object]],
+    risk_count_high: int,
+    risk_count_medium: int,
+    risk_count_low: int,
+) -> str:
+    focus_areas = _summarize_focus_areas(risk_groups)
     if risk_count_high > 0:
-        return f"本文件归并后存在 {risk_count_high} 组高风险问题和 {risk_count_medium} 组中风险问题，建议优先复核品牌指向、合同责任失衡和资格门槛偏严条款。"
+        if focus_areas:
+            return f"本文件归并后存在 {risk_count_high} 组高风险问题和 {risk_count_medium} 组中风险问题，主要集中在{focus_areas}，建议优先人工复核。"
+        return f"本文件归并后存在 {risk_count_high} 组高风险问题和 {risk_count_medium} 组中风险问题，建议优先人工复核。"
     if risk_count_medium > 0:
-        return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，建议优先复核资格门槛、评分条款和商务要求。"
+        if focus_areas:
+            return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，主要集中在{focus_areas}，建议优先人工复核。"
+        return f"本文件未发现高风险问题，但归并后存在 {risk_count_medium} 组中风险问题，建议优先人工复核。"
     if risk_count_low > 0:
         return f"本文件未发现高风险或中风险问题，当前归并后仅识别到 {risk_count_low} 组低风险提示。"
     return "当前最小审查链路未识别到明显风险，建议结合人工复核继续确认。"

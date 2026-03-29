@@ -6,6 +6,10 @@ import re
 
 SEVERITY_ORDER = {"高": 0, "中": 1, "低": 2}
 GENERIC_UNIT_LABELS = {"普通条款", "普通表格行", "不确定审查对象", "未标注"}
+GENERIC_RISK_TITLES = {
+    "R9": {"评审可解释性规则", "评分项未量化检查"},
+    "R12": {"关键条款缺失/责任失衡检查"},
+}
 
 
 def extract_chapter_title(location_label: str, *, default: str = "") -> str:
@@ -63,13 +67,28 @@ def merge_texts(values: list[str], *, fallback: str = "无", limit: int | None =
     return "；".join(unique_values)
 
 
+def _trim_display_text(text: str, *, limit: int) -> str:
+    cleaned = str(text).strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return f"{cleaned[: limit - 3].rstrip()}..."
+
+
 def _normalize_location_label(location_label: str) -> str:
     parts = [part.strip() for part in str(location_label).split(" / ") if part.strip()]
     if not parts:
         return "无"
-    if len(parts) <= 3:
-        return " / ".join(parts)
-    return " / ".join(parts[:3])
+    normalized_parts = [_trim_display_text(part, limit=42) for part in parts]
+    if len(normalized_parts) <= 3:
+        return " / ".join(normalized_parts)
+    return " / ".join(normalized_parts[:3])
+
+
+def _normalize_chapter_title(chapter_title: str) -> str:
+    title = str(chapter_title).strip()
+    if not title:
+        return ""
+    return _trim_display_text(title, limit=42)
 
 
 def _format_unit_display(*, unit_label: str, unit_name: str) -> str:
@@ -129,6 +148,32 @@ def _should_hide_group(group: dict[str, object], all_groups: list[dict[str, obje
     )
 
 
+def _normalize_risk_title(*, rule_code: str, risk_title: str, unit_label: str, unit_name: str, evidence_text: str) -> str:
+    title = str(risk_title).strip()
+    if title:
+        if rule_code == "R9" and "评分标准量化不足" in title:
+            return "评分标准量化不足，自由裁量空间较大"
+        if title not in GENERIC_RISK_TITLES.get(rule_code, set()):
+            return title
+
+    combined_text = "\n".join(
+        part
+        for part in (unit_label, unit_name, evidence_text)
+        if str(part).strip()
+    )
+    if rule_code == "R12":
+        if any(keyword in combined_text for keyword in ("财政", "据实支付", "初验款", "终验款", "付款", "支付")):
+            return "付款条件与财政资金挂钩，存在回款责任失衡风险"
+        if "单方解除" in combined_text and "不承担任何违约责任" in combined_text:
+            return "单方解除且免责，存在合同责任失衡风险"
+        if any(keyword in combined_text for keyword in ("检测", "验收", "费用承担")):
+            return "检测或验收责任分配失衡，建议人工复核"
+        return "合同条款存在责任失衡风险"
+    if rule_code == "R9":
+        return "评分标准量化不足，自由裁量空间较大"
+    return title
+
+
 def group_risks(
     *,
     risks: list[object],
@@ -179,16 +224,28 @@ def group_risks(
             str(getattr(clause, "location_label", "")).strip()
             or str(representative.location_label)
         )
+        evidence_text = merge_texts(
+            [str(item.quoted_text) for item in merged_evidences],
+            fallback="无",
+        )
+        risk_title = _normalize_risk_title(
+            rule_code=_normalize_rule_code(representative.rule_id),
+            risk_title=str(representative.risk_title),
+            unit_label=raw_unit_label,
+            unit_name=unit_name,
+            evidence_text=evidence_text,
+        )
         groups.append(
             {
                 "risk_id": representative.risk_id,
-                "risk_title": representative.risk_title,
+                "risk_title": risk_title,
+                "raw_risk_title": representative.risk_title,
                 "risk_level": representative.risk_level,
                 "rule_id": representative.rule_id,
                 "rule_code": _normalize_rule_code(representative.rule_id),
                 "rule_domain": representative.rule_domain,
                 "location_label": _normalize_location_label(location_label),
-                "chapter_title": chapter_title,
+                "chapter_title": _normalize_chapter_title(chapter_title),
                 "clause_type": clause_type,
                 "unit_label": unit_label,
                 "raw_unit_label": raw_unit_label,
@@ -200,10 +257,7 @@ def group_risks(
                     [str(item.review_reasoning) for item in merged_risks],
                     fallback=str(representative.review_reasoning),
                 ),
-                "evidence_text": merge_texts(
-                    [str(item.quoted_text) for item in merged_evidences],
-                    fallback="无",
-                ),
+                "evidence_text": evidence_text,
                 "evidence_note": merge_texts(
                     [str(item.evidence_note) for item in merged_evidences],
                     fallback="无",
