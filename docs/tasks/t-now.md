@@ -2,17 +2,17 @@
 
 ## 当前阶段
 
-- `LLM V1` 首轮实现已完成，当前已完成新配置下的真实联调验证
+- `LLM V1` 首轮实现已完成，当前进入结果质量复盘与下一轮精度优化准备
 
 ## 当前唯一目标
 
-- 在不扩范围的前提下，基于已打通的真实闭环进入下一轮精度优化与结构收口
+- 在不扩范围的前提下，基于真实样例输出结果完成质量复盘，并收口下一轮精度优化建议
 
 ## 当前要看什么
 
 1. `docs/status/summary.md`
 2. `docs/comms/inbox-t.md`
-3. `docs/tech/v1/llm-v1-implementation-kickoff.md`
+3. `docs/tech/v1/llm-v1-implementation-round-2.md`
 4. 必要时再读 `docs/tasks/current.md`
 5. 需要复盘时再读 `docs/tasks/archive/`
 
@@ -30,4 +30,4 @@
 - `SZCG2025000300-A` 已真实跑到 `completed`
 - 当前结果页与下载链路已在真实调用下验证通过
 - 平时优先维护本文件，完成一轮实现并准备回提时再更新 `docs/tasks/current.md`
-- 当前不继续扩页面、不补零散优化，优先进入下一轮精度优化准备
+- 当前不继续扩页面、不补零散优化，优先完成真实结果质量复盘并收口下一轮优化建议
