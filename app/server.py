@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from urllib.parse import quote
 
 from app.result_page import render_missing_page, render_result_page
+from app.upload_page import render_upload_page, render_waiting_page
 from app.repository import JsonRepository
 from app.upload_service import ResultAccessError, UploadFile, UploadProcessingError, UploadService, UploadValidationError
 
@@ -48,6 +49,10 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     server_version = "agent_dis/0.1"
 
     def do_POST(self) -> None:
+        if self.path == "/review-tasks/upload":
+            self._handle_upload_form_submit()
+            return
+
         if self.path != "/api/v1/review-tasks":
             self._write_json(HTTPStatus.NOT_FOUND, {"error_code": "NOT_FOUND", "error_message": "接口不存在。"})
             return
@@ -65,6 +70,15 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
+        if path in {"/", "/upload"}:
+            self._write_html(HTTPStatus.OK, render_upload_page())
+            return
+
+        if path.startswith("/review-tasks/") and path.endswith("/waiting"):
+            task_id = path.removeprefix("/review-tasks/").removesuffix("/waiting")
+            self._handle_waiting_page(task_id)
+            return
+
         if path.startswith("/review-tasks/") and path.endswith("/page"):
             task_id = path.removeprefix("/review-tasks/").removesuffix("/page")
             if not task_id or "/" in task_id:
@@ -128,6 +142,50 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
 
+    def _handle_upload_form_submit(self) -> None:
+        try:
+            upload_file = self._read_upload_file()
+            response = self.server.upload_service.create_review_task(upload_file)
+            self._write_redirect(HTTPStatus.SEE_OTHER, f"/review-tasks/{response['task_id']}/waiting?fresh=1")
+        except UploadValidationError as exc:
+            self._write_html(exc.status_code, render_upload_page(error_message=exc.error_message))
+        except UploadProcessingError as exc:
+            self._write_html(HTTPStatus.INTERNAL_SERVER_ERROR, render_upload_page(error_message=exc.error_message))
+
+    def _handle_waiting_page(self, task_id: str) -> None:
+        if not task_id or "/" in task_id:
+            self._write_html(HTTPStatus.NOT_FOUND, render_missing_page())
+            return
+
+        query = urlparse(self.path).query
+        if "fresh=1" not in query:
+            from app.worker_runner import WorkerRunner
+
+            WorkerRunner(
+                JsonRepository(build_runtime_root()),
+                Path(__file__).resolve().parent.parent,
+            ).run_once()
+
+        payload = self.server.upload_service.get_review_task_status(task_id)
+        if payload is None:
+            self._write_html(HTTPStatus.NOT_FOUND, render_missing_page())
+            return
+
+        if payload["status"] in {"completed", "failed"}:
+            self._write_redirect(HTTPStatus.SEE_OTHER, f"/review-tasks/{task_id}/page")
+            return
+
+        self._write_html(
+            HTTPStatus.OK,
+            render_waiting_page(
+                task_id=task_id,
+                file_name=str(payload["file_name"]),
+                status_message=str(payload["message"]),
+                status_api_url=f"/api/v1/review-tasks/{task_id}",
+                result_page_url=f"/review-tasks/{task_id}/page",
+            ),
+        )
+
     def _read_upload_file(self) -> UploadFile:
         content_type = self.headers.get("Content-Type", "")
         if "multipart/form-data" not in content_type:
@@ -167,6 +225,12 @@ class ReviewRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _write_redirect(self, status_code: int, location: str) -> None:
+        self.send_response(status_code)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
 
 class ReviewHTTPServer(ThreadingHTTPServer):

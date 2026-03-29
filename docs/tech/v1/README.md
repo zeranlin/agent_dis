@@ -55,6 +55,7 @@
 - `implementation-prep-round-28.md`：第二十八轮实现准备，聚焦真实样例联调结果与验收放行判断
 - `implementation-prep-round-29.md`：第二十九轮实现准备，按联调记录模板固化真实样例联调与验收记录
 - `implementation-prep-round-30.md`：第三十轮实现准备，聚焦验收执行支持、最终交付说明与交接材料清单
+- `implementation-prep-round-31.md`：第三十一轮实现准备，聚焦上传页、等待页与结果页的最小页面闭环补齐
 
 ## 交付准备模板
 

@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from uuid import uuid4
+from urllib.parse import urljoin
 
 from app.repository import JsonRepository
 from app.server import ReviewHTTPServer, create_service
@@ -69,6 +70,108 @@ class TestServerContext:
 
 
 class UploadApiTestCase(unittest.TestCase):
+    def test_upload_page_renders_form(self):
+        with TestServerContext() as server:
+            with urllib.request.urlopen(server.base_url) as response:
+                html = response.read().decode("utf-8")
+                headers = dict(response.headers.items())
+
+            self.assertEqual(headers["Content-Type"], "text/html; charset=utf-8")
+            self.assertIn("提交待审查招标文件", html)
+            self.assertIn("开始审核", html)
+            self.assertIn('action="/review-tasks/upload"', html)
+            self.assertIn('type="file"', html)
+
+    def test_upload_form_redirects_to_waiting_page(self):
+        class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                return None
+
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(
+                boundary,
+                "招标文件.docx",
+                (
+                    "第一章 资格要求\n"
+                    "1.1 供应商资格\n"
+                    "供应商须本地注册并在本地办公。\n"
+                ).encode("utf-8"),
+            )
+            request = urllib.request.Request(
+                f"{server.base_url}/review-tasks/upload",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            opener = urllib.request.build_opener(NoRedirectHandler())
+
+            with self.assertRaises(urllib.error.HTTPError) as context:
+                opener.open(request)
+
+            self.assertEqual(context.exception.code, 303)
+            location = context.exception.headers["Location"]
+            self.assertIn("/review-tasks/task_", location)
+            self.assertIn("/waiting?fresh=1", location)
+
+    def test_waiting_page_renders_waiting_feedback(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(boundary, "招标文件.pdf", b"fake-pdf-content")
+            request = urllib.request.Request(
+                f"{server.base_url}/api/v1/review-tasks",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+
+            with urllib.request.urlopen(f"{server.base_url}/review-tasks/{payload['task_id']}/waiting?fresh=1") as response:
+                html = response.read().decode("utf-8")
+
+            self.assertIn("等待页", html)
+            self.assertIn("等待审查", html)
+            self.assertIn("查看状态接口", html)
+            self.assertIn("直接查看结果页", html)
+
+    def test_waiting_page_redirects_to_result_page_when_worker_completes(self):
+        with TestServerContext() as server:
+            boundary = f"boundary-{uuid4().hex}"
+            body = build_multipart_body(
+                boundary,
+                "招标文件.docx",
+                (
+                    "第一章 资格要求\n"
+                    "1.1 供应商资格\n"
+                    "供应商须本地注册并在本地办公。\n"
+                    "第二章 评分办法\n"
+                    "2.1 评分标准\n"
+                    "采用综合评价并可酌情打分。\n"
+                ).encode("utf-8"),
+            )
+            request = urllib.request.Request(
+                f"{server.base_url}/review-tasks/upload",
+                data=body,
+                method="POST",
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            )
+            with urllib.request.urlopen(request) as response:
+                final_url = response.geturl()
+                html = response.read().decode("utf-8")
+
+            self.assertIn("/waiting", final_url)
+            self.assertIn("等待审查", html)
+
+            with urllib.request.urlopen(urljoin(server.base_url, final_url.replace("?fresh=1", ""))) as response:
+                final_html = response.read().decode("utf-8")
+                result_url = response.geturl()
+
+            self.assertIn("/review-tasks/", result_url)
+            self.assertIn("/page", result_url)
+            self.assertIn("结果查看页", final_html)
+            self.assertIn("结果已生成", final_html)
+
     def test_result_page_payload_keeps_canonical_fields_for_reviewing_task(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             repository = JsonRepository(Path(runtime_dir))
