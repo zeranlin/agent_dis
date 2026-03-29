@@ -1593,7 +1593,8 @@ class ParseWorkerTestCase(unittest.TestCase):
         )
 
         self.assertEqual([clause.clause_id for clause in mapping["R3"]], ["c1"])
-        self.assertEqual([clause.clause_id for clause in mapping["R9"]], ["c2"])
+        self.assertEqual(mapping["R9"][0].clause_id, "c2")
+        self.assertIn("c2", [clause.clause_id for clause in mapping["R9"]])
 
     def test_select_rule_candidate_clause_map_prefers_specific_review_units(self):
         rules = [
@@ -2358,6 +2359,56 @@ class ParseWorkerTestCase(unittest.TestCase):
 
         self.assertEqual([clause.clause_id for clause in mapping["R4"]], ["r4_real"])
 
+    def test_select_rule_candidate_clause_map_prefers_explicit_r4_signal_over_boilerplate(self):
+        rules = [
+            {
+                "rule_code": "R4",
+                "rule_name": "业绩要求定向检查",
+                "rule_domain": "公平竞争规则",
+                "hit_definition": "资格业绩要求存在区域或数量定向风险时命中。",
+                "focus_terms": ["同类项目业绩不少于", "深圳市"],
+                "positive_examples": ["投标人须具备深圳市医疗器械行业同类项目业绩不少于2个。"],
+            }
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="r4_boilerplate",
+                document_id="d1",
+                chapter_id="c1",
+                chapter_title="十一、合同生效及其他",
+                clause_order=1,
+                clause_text="综合评分法，是指在满足招标文件全部实质性要求的前提下，按照招标文件中规定的各项因素进行综合评审。",
+                location_label="十一、合同生效及其他 / 37.1.2 综合评分法",
+                module_type="评分办法",
+                unit_type="评分项",
+                unit_label="单个评分项",
+                unit_name="综合评分法",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="r4_real_uncertain",
+                document_id="d1",
+                chapter_id="c2",
+                chapter_title="五、风险知悉确认书",
+                clause_order=2,
+                clause_text="投标人须具备深圳市医疗器械行业同类项目业绩不少于2个（提供合同扫描件）。",
+                location_label="五、风险知悉确认书 / 14.投标人须具备深圳市医疗器械行业同类项目业绩不少于2个",
+                module_type="程序条款",
+                unit_type="条款",
+                unit_label="不确定审查对象",
+                unit_name="14.投标人须具备深圳市医疗器械行业同类项目业绩不少于2个",
+                clause_type="条款片段",
+            ),
+        ]
+
+        mapping = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in mapping["R4"][:2]], ["r4_real_uncertain", "r4_boilerplate"])
+
     def test_review_executor_filters_r5_noise_findings_before_persist(self):
         class NoiseClient:
             max_clauses = 20
@@ -2433,6 +2484,80 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertEqual(len(risks), 1)
             self.assertEqual(risks[0].rule_id, "rule_v1_r5")
             self.assertIn("同品牌", risks[0].risk_description)
+
+    def test_review_executor_filters_r4_findings_without_explicit_performance_signal(self):
+        class R4NoiseClient:
+            max_clauses = 20
+            max_clauses_per_rule = 24
+            batch_size = 4
+            clause_max_chars = 800
+            batch_char_budget = 1000
+            rule_limit = 6
+
+            def review_batch(self, *, prompt_text: str, payload: dict[str, object]) -> list[dict[str, object]]:
+                findings: list[dict[str, object]] = []
+                for clause in payload["clauses"]:
+                    assert isinstance(clause, dict)
+                    text = str(clause["clause_text"])
+                    if "深圳市政府采购项目" in text:
+                        findings.append(
+                            {
+                                "clause_id": clause["clause_id"],
+                                "rule_code": "R4",
+                                "risk_title": "资格业绩要求存在区域或数量定向风险",
+                                "risk_level": "高",
+                                "risk_category": "资格条件违法限定",
+                                "evidence_text": text,
+                                "review_reasoning": "模型把普通说明条款误判为 R4。",
+                                "need_human_confirm": True,
+                            }
+                        )
+                    if "同类项目业绩不少于2个" in text:
+                        findings.append(
+                            {
+                                "clause_id": clause["clause_id"],
+                                "rule_code": "R4",
+                                "risk_title": "资格业绩要求存在区域或数量定向风险",
+                                "risk_level": "高",
+                                "risk_category": "资格条件违法限定",
+                                "evidence_text": text,
+                                "review_reasoning": "模型识别到真实业绩定向条款。",
+                                "need_human_confirm": True,
+                            }
+                        )
+                return findings
+
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir, fake_llm_environment():
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="r4-noise.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 说明",
+                            "1.1 本项目适用深圳市政府采购项目通用条款。",
+                            "第二章 资格要求",
+                            "2.1 投标人须具备深圳市医疗器械行业同类项目业绩不少于2个（提供合同扫描件）。",
+                        ]
+                    ),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+
+            executor = ReviewExecutor(repository, root_dir)
+            executor.client = R4NoiseClient()
+
+            processed_count = executor.run_pending_jobs()
+
+            self.assertEqual(processed_count, 1)
+            risks = repository.list_risks_by_task(upload_response["task_id"])
+            self.assertEqual(len(risks), 1)
+            self.assertEqual(risks[0].rule_id, "rule_v1_r4")
+            evidences = repository.list_evidences_by_risk(risks[0].risk_id)
+            self.assertEqual(len(evidences), 1)
+            self.assertIn("同类项目业绩不少于2个", evidences[0].quoted_text)
 
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:

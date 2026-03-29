@@ -140,6 +140,17 @@ R4_NOISE_LOCATION_KEYWORDS = (
     "评审活动",
     "投标及履约承诺函",
 )
+R4_BOILERPLATE_KEYWORDS = (
+    "资格性审查表",
+    "符合性审查表",
+    "综合评分法",
+    "评审方法",
+    "评审定标",
+    "评审活动",
+    "重新评审",
+    "独立评审",
+    "评标因素",
+)
 SCORING_BOILERPLATE_KEYWORDS = (
     "综合评分法",
     "评审委员会",
@@ -614,14 +625,15 @@ def _score_rule_clause_match(
         score += 1
     if rule_code == "R5" and _is_r5_noise_clause(clause):
         return 0
-    score += _score_rule_specific_signal(rule_code=rule_code, clause=clause)
+    specific_signal_score = _score_rule_specific_signal(rule_code=rule_code, clause=clause)
+    score += specific_signal_score
     text_matched = _rule_matches_batch_text(
         rule=rule,
         batch_text=f"{chapter_title}\n{getattr(clause, 'clause_text', '')}",
     )
     if text_matched:
         score += 5
-    if not module_matched and not text_matched:
+    if not module_matched and not text_matched and specific_signal_score <= 0:
         return 0
     return score
 
@@ -806,7 +818,7 @@ def _should_drop_finding_for_noise(
     if rule_code == "R5" and clause is not None:
         return _is_r5_noise_clause(clause)
     if rule_code == "R4" and clause is not None:
-        return _is_r4_noise_clause(clause)
+        return _is_r4_noise_clause(clause) or _is_r4_boilerplate_clause(clause) or not _has_explicit_r4_signal(clause)
     return False
 
 
@@ -844,6 +856,45 @@ def _is_r4_noise_clause(clause: object) -> bool:
     return any(keyword in combined_text for keyword in R4_NOISE_LOCATION_KEYWORDS)
 
 
+def _has_explicit_r4_signal(clause: object) -> bool:
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    combined_text = "\n".join(
+        [
+            str(getattr(clause, "location_label", "")).strip(),
+            str(getattr(clause, "unit_name", "")).strip(),
+            clause_text,
+        ]
+    )
+    has_requirement_phrase = any(
+        keyword in clause_text
+        for keyword in ("投标人须", "须具备", "应具备", "须提供", "提供合同", "业绩要求")
+    )
+    has_region_signal = any(keyword in combined_text for keyword in ("深圳市", "本市", "当地"))
+    has_performance_signal = any(keyword in combined_text for keyword in ("同类项目", "类似项目", "业绩", "案例"))
+    has_count_signal = bool(PERFORMANCE_COUNT_PATTERN.search(clause_text))
+    has_direct_phrase = any(
+        keyword in combined_text
+        for keyword in ("同类项目业绩不少于", "类似项目业绩不少于", "业绩不少于", "案例不少于")
+    )
+    return (has_count_signal and has_performance_signal) or has_direct_phrase or (
+        has_requirement_phrase and has_region_signal and has_performance_signal
+    )
+
+
+def _is_r4_boilerplate_clause(clause: object) -> bool:
+    if _has_explicit_r4_signal(clause):
+        return False
+    combined_text = "\n".join(
+        [
+            str(getattr(clause, "location_label", "")).strip(),
+            str(getattr(clause, "chapter_title", "")).strip(),
+            str(getattr(clause, "unit_name", "")).strip(),
+            str(getattr(clause, "clause_text", "")).strip(),
+        ]
+    )
+    return any(keyword in combined_text for keyword in R4_BOILERPLATE_KEYWORDS)
+
+
 def _score_rule_specific_signal(*, rule_code: str, clause: object) -> int:
     clause_text = str(getattr(clause, "clause_text", "")).strip()
     normalized_text = _normalize_for_match(
@@ -863,6 +914,10 @@ def _score_rule_specific_signal(*, rule_code: str, clause: object) -> int:
     if rule_code == "R4":
         if _is_r4_noise_clause(clause):
             return -6
+        if _is_r4_boilerplate_clause(clause):
+            return -5
+        if _has_explicit_r4_signal(clause):
+            return 10
         if PERFORMANCE_COUNT_PATTERN.search(clause_text):
             return 8
         if any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS):
@@ -906,8 +961,7 @@ def _detect_qualification_gap_findings(
         or bool(YEAR_LIMIT_PATTERN.search(clause_text))
     )
     explicit_r4_signal = (
-        any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS)
-        or bool(PERFORMANCE_COUNT_PATTERN.search(clause_text))
+        _has_explicit_r4_signal(clause)
     )
     if module_type != "资格条件" and unit_label not in QUALIFICATION_UNIT_LABELS and not explicit_r3_signal and not explicit_r4_signal:
         return []
@@ -939,8 +993,7 @@ def _detect_qualification_gap_findings(
             )
 
     if "R4" in available_rule_codes:
-        region_matched = any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS)
-        if not _is_r4_noise_clause(clause) and (region_matched or PERFORMANCE_COUNT_PATTERN.search(clause_text)):
+        if not _is_r4_noise_clause(clause) and _has_explicit_r4_signal(clause):
             findings.append(
                 _build_heuristic_finding(
                     clause=clause,
