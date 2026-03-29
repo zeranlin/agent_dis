@@ -110,6 +110,44 @@ PRICE_RULE_KEYWORDS = ("价格分", "报价得分", "价格评审", "评标基�
 YEAR_LIMIT_PATTERN = re.compile(r"(成立|设立|经营|注册).{0,8}(满|达到|不少于|超过)?\s*[0-9一二三四五六七八九十两]+\s*年")
 PERFORMANCE_COUNT_PATTERN = re.compile(r"(同类项目|类似项目|业绩|案例).{0,20}(不少于|至少|达到|满)\s*[0-9一二三四五六七八九十两]+\s*(个|项|份|家)")
 SCORING_CONTEXT_PATTERN = re.compile(r"(得\d+分|得分|满分|评分|分值)")
+R5_NOISE_LOCATION_KEYWORDS = (
+    "项目详细报价",
+    "规格/型号",
+    "知识产权",
+    "商标权",
+    "专利权",
+    "工业设计权",
+    "来货初验",
+    "型号、外观、数量",
+)
+R5_NOISE_TEXT_KEYWORDS = (
+    "仅填写规格信息",
+    "不填型号信息",
+    "定制",
+    "侵犯知识产权",
+    "商标权",
+    "专利权",
+    "工业设计权",
+    "型号、外观、数量",
+    "开箱验货",
+)
+R4_NOISE_LOCATION_KEYWORDS = (
+    "信用信息",
+    "信用记录",
+    "信用承诺",
+    "特别警示",
+    "评审委员会",
+    "评审活动",
+    "投标及履约承诺函",
+)
+SCORING_BOILERPLATE_KEYWORDS = (
+    "综合评分法",
+    "评审委员会",
+    "评审活动",
+    "评审定标",
+    "候选中标人",
+    "评标结果",
+)
 
 
 class ReviewExecutor:
@@ -281,7 +319,15 @@ class ReviewExecutor:
                     clause_max_chars=clause_max_chars,
                 ),
             )
-            return _dedupe_findings_by_clause_and_rule(heuristic_findings + llm_findings)
+            filtered_findings = [
+                finding
+                for finding in heuristic_findings + llm_findings
+                if not _should_drop_finding_for_noise(
+                    finding=finding,
+                    clauses_by_id={str(getattr(item, "clause_id", "")): item for item in clause_batch},
+                )
+            ]
+            return _dedupe_findings_by_clause_and_rule(filtered_findings)
         except LlmRequestError:
             if heuristic_findings and len(clause_batch) == 1:
                 return heuristic_findings
@@ -547,6 +593,7 @@ def _score_rule_clause_match(
     preferred_modules: set[str],
 ) -> int:
     rule_unit_labels = set(_preferred_unit_labels_for_rule(rule))
+    rule_code = str(rule.get("rule_code") or "")
     score = 0
     clause_modules = set(_classify_clause_business_modules(clause))
     module_matched = bool(clause_modules & preferred_modules)
@@ -565,6 +612,9 @@ def _score_rule_clause_match(
     chapter_title = str(getattr(clause, "chapter_title", ""))
     if any(keyword in chapter_title for keyword in HIGH_VALUE_SECTION_KEYWORDS):
         score += 1
+    if rule_code == "R5" and _is_r5_noise_clause(clause):
+        return 0
+    score += _score_rule_specific_signal(rule_code=rule_code, clause=clause)
     text_matched = _rule_matches_batch_text(
         rule=rule,
         batch_text=f"{chapter_title}\n{getattr(clause, 'clause_text', '')}",
@@ -745,6 +795,94 @@ def _dedupe_findings_by_clause_and_rule(findings: list[dict[str, object]]) -> li
     return deduped
 
 
+def _should_drop_finding_for_noise(
+    *,
+    finding: dict[str, object],
+    clauses_by_id: dict[str, object],
+) -> bool:
+    rule_code = str(finding.get("rule_code") or "").strip()
+    clause_id = str(finding.get("clause_id") or "").strip()
+    clause = clauses_by_id.get(clause_id)
+    if rule_code == "R5" and clause is not None:
+        return _is_r5_noise_clause(clause)
+    if rule_code == "R4" and clause is not None:
+        return _is_r4_noise_clause(clause)
+    return False
+
+
+def _is_r5_noise_clause(clause: object) -> bool:
+    location_label = str(getattr(clause, "location_label", "")).strip()
+    chapter_title = str(getattr(clause, "chapter_title", "")).strip()
+    unit_name = str(getattr(clause, "unit_name", "")).strip()
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    combined_text = "\n".join([location_label, chapter_title, unit_name, clause_text])
+    if any(keyword in combined_text for keyword in R5_NOISE_LOCATION_KEYWORDS):
+        return True
+    if any(keyword in clause_text for keyword in R5_NOISE_TEXT_KEYWORDS):
+        return True
+    if "型号" in clause_text and "同品牌" not in clause_text and "指定品牌" not in clause_text and "原厂" not in clause_text:
+        if any(keyword in combined_text for keyword in ("验收", "报价", "承诺函", "知识产权")):
+            return True
+    return False
+
+
+def _is_r4_noise_clause(clause: object) -> bool:
+    location_label = str(getattr(clause, "location_label", "")).strip()
+    chapter_title = str(getattr(clause, "chapter_title", "")).strip()
+    unit_name = str(getattr(clause, "unit_name", "")).strip()
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    combined_text = "\n".join([location_label, chapter_title, unit_name, clause_text])
+    has_performance_signal = (
+        bool(PERFORMANCE_COUNT_PATTERN.search(clause_text))
+        or "同类项目" in clause_text
+        or "类似项目" in clause_text
+        or "业绩" in clause_text
+        or "案例" in clause_text
+    )
+    if has_performance_signal:
+        return False
+    return any(keyword in combined_text for keyword in R4_NOISE_LOCATION_KEYWORDS)
+
+
+def _score_rule_specific_signal(*, rule_code: str, clause: object) -> int:
+    clause_text = str(getattr(clause, "clause_text", "")).strip()
+    normalized_text = _normalize_for_match(
+        "\n".join(
+            [
+                str(getattr(clause, "location_label", "")),
+                str(getattr(clause, "unit_name", "")),
+                clause_text,
+            ]
+        )
+    )
+    if rule_code == "R3":
+        if any(keyword in normalized_text for keyword in map(_normalize_for_match, QUALIFICATION_CERT_OR_CREDIT_KEYWORDS)):
+            return 8
+        if YEAR_LIMIT_PATTERN.search(clause_text):
+            return 7
+    if rule_code == "R4":
+        if _is_r4_noise_clause(clause):
+            return -6
+        if PERFORMANCE_COUNT_PATTERN.search(clause_text):
+            return 8
+        if any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS):
+            return 6
+    if rule_code == "R9":
+        if any(keyword in clause_text for keyword in ("评标基准价", "算术平均价", "平均价")):
+            return 9
+        if any(keyword in normalized_text for keyword in map(_normalize_for_match, SCORING_SCALE_KEYWORDS)):
+            return 8
+        if "成立时间" in clause_text or YEAR_LIMIT_PATTERN.search(clause_text):
+            return 7
+        if any(keyword in clause_text for keyword in SCORING_CERTIFICATE_KEYWORDS):
+            return 7
+        if any(keyword in clause_text for keyword in SCORING_SUBJECTIVE_KEYWORDS):
+            return 6
+        if any(keyword in clause_text for keyword in SCORING_BOILERPLATE_KEYWORDS):
+            return -4
+    return 0
+
+
 def _detect_qualification_gap_findings(
     *,
     clause: object,
@@ -752,8 +890,6 @@ def _detect_qualification_gap_findings(
 ) -> list[dict[str, object]]:
     module_type = str(getattr(clause, "module_type", "")).strip()
     unit_label = str(getattr(clause, "unit_label", "")).strip()
-    if module_type != "资格条件" and unit_label not in QUALIFICATION_UNIT_LABELS:
-        return []
 
     clause_text = str(getattr(clause, "clause_text", "")).strip()
     summary_text = _normalize_for_match(
@@ -765,6 +901,16 @@ def _detect_qualification_gap_findings(
             ]
         )
     )
+    explicit_r3_signal = (
+        any(keyword in summary_text for keyword in map(_normalize_for_match, QUALIFICATION_CERT_OR_CREDIT_KEYWORDS))
+        or bool(YEAR_LIMIT_PATTERN.search(clause_text))
+    )
+    explicit_r4_signal = (
+        any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS)
+        or bool(PERFORMANCE_COUNT_PATTERN.search(clause_text))
+    )
+    if module_type != "资格条件" and unit_label not in QUALIFICATION_UNIT_LABELS and not explicit_r3_signal and not explicit_r4_signal:
+        return []
     findings: list[dict[str, object]] = []
     if "R3" in available_rule_codes:
         if any(keyword in summary_text for keyword in map(_normalize_for_match, QUALIFICATION_CERT_OR_CREDIT_KEYWORDS)):
@@ -794,7 +940,7 @@ def _detect_qualification_gap_findings(
 
     if "R4" in available_rule_codes:
         region_matched = any(keyword in clause_text for keyword in QUALIFICATION_REGION_OR_PERFORMANCE_KEYWORDS)
-        if region_matched or PERFORMANCE_COUNT_PATTERN.search(clause_text):
+        if not _is_r4_noise_clause(clause) and (region_matched or PERFORMANCE_COUNT_PATTERN.search(clause_text)):
             findings.append(
                 _build_heuristic_finding(
                     clause=clause,
@@ -816,8 +962,6 @@ def _detect_scoring_gap_findings(
 ) -> list[dict[str, object]]:
     module_type = str(getattr(clause, "module_type", "")).strip()
     unit_label = str(getattr(clause, "unit_label", "")).strip()
-    if module_type != "评分办法" and unit_label not in SCORING_UNIT_LABELS:
-        return []
     if "R9" not in available_rule_codes:
         return []
 
@@ -834,6 +978,15 @@ def _detect_scoring_gap_findings(
             ]
         )
     )
+    explicit_signal = (
+        any(keyword in normalized_text for keyword in map(_normalize_for_match, SCORING_SCALE_KEYWORDS))
+        or "成立时间" in clause_text
+        or bool(YEAR_LIMIT_PATTERN.search(clause_text))
+        or any(keyword in clause_text for keyword in SCORING_CERTIFICATE_KEYWORDS)
+        or any(keyword in clause_text for keyword in SCORING_SUBJECTIVE_KEYWORDS)
+    )
+    if module_type != "评分办法" and unit_label not in SCORING_UNIT_LABELS and not explicit_signal:
+        return []
     if any(keyword in normalized_text for keyword in map(_normalize_for_match, SCORING_SCALE_KEYWORDS)):
         return [
             _build_heuristic_finding(
@@ -894,8 +1047,6 @@ def _detect_price_rule_gap_findings(
     unit_label = str(getattr(clause, "unit_label", "")).strip()
     if "R9" not in available_rule_codes:
         return []
-    if module_type != "评分办法" and unit_label != "价格分规则":
-        return []
 
     clause_text = str(getattr(clause, "clause_text", "")).strip()
     summary_text = "\n".join(
@@ -907,6 +1058,9 @@ def _detect_price_rule_gap_findings(
     )
     if not any(keyword in summary_text for keyword in PRICE_RULE_KEYWORDS):
         return []
+    if module_type != "评分办法" and unit_label != "价格分规则":
+        if "评标基准价" not in clause_text and "算术平均价" not in clause_text and "平均价" not in clause_text:
+            return []
 
     if any(keyword in clause_text for keyword in ("平均价", "算术平均", "平均报价", "评标基准价", "基准价")):
         return [

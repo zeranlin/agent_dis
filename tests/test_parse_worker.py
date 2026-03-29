@@ -11,7 +11,12 @@ from pathlib import Path
 from app.asset_loader import ReviewAssetLoader
 from app.llm_client import LlmRequestError
 from app.llm_client import _extract_message_content, _parse_json_content
-from app.models import build_clause_record, build_evidence_item_record, build_risk_item_record
+from app.models import (
+    build_clause_record,
+    build_evidence_item_record,
+    build_review_result_record,
+    build_risk_item_record,
+)
 from app.parser_worker import ParseWorker
 from app.result_aggregator import build_report_markdown
 from app.result_presenter import group_risks
@@ -25,6 +30,8 @@ from app.review_executor import (
     _build_heuristic_findings,
     _classify_clause_business_modules,
     _chunk_clauses_for_review,
+    _is_r4_noise_clause,
+    _is_r5_noise_clause,
     _normalize_finding_rule_code,
     _next_retry_clause_max_chars,
     _select_candidate_clauses,
@@ -2010,6 +2017,59 @@ class ParseWorkerTestCase(unittest.TestCase):
         self.assertTrue(any("规模财务指标" in str(item["risk_title"]) for item in findings))
         self.assertTrue(any("低价优先原则" in str(item["risk_title"]) for item in findings))
 
+    def test_build_heuristic_findings_accepts_explicit_signals_even_in_uncertain_unit(self):
+        qualification_clause = build_clause_record(
+            clause_id="uncertain_qualification",
+            document_id="d1",
+            chapter_id="c1",
+            chapter_title="五、风险知悉确认书",
+            clause_order=1,
+            clause_text="投标人须具备高新技术企业证书，并提供纳税信用A级证明，且成立满5年以上。",
+            location_label="五、风险知悉确认书 / 11",
+            module_type="程序条款",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="资格限制样例",
+            clause_type="条款片段",
+        )
+        scoring_clause = build_clause_record(
+            clause_id="uncertain_scoring",
+            document_id="d1",
+            chapter_id="c2",
+            chapter_title="五、风险知悉确认书",
+            clause_order=2,
+            clause_text="投标人资产总额达到5000万元以上得5分；投标人成立时间满5年的得3分。",
+            location_label="五、风险知悉确认书 / 12",
+            module_type="程序条款",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="评分限制样例",
+            clause_type="条款片段",
+        )
+        price_clause = build_clause_record(
+            clause_id="uncertain_price",
+            document_id="d1",
+            chapter_id="c3",
+            chapter_title="五、风险知悉确认书",
+            clause_order=3,
+            clause_text="投标报价得分=(评标基准价／投标报价)×100，评标基准价按所有有效投标报价的算术平均价确定。",
+            location_label="五、风险知悉确认书 / 13",
+            module_type="程序条款",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="价格分公式样例",
+            clause_type="条款片段",
+        )
+
+        findings = _build_heuristic_findings(
+            clause_batch=[qualification_clause, scoring_clause, price_clause],
+            selected_rules=[{"rule_code": "R3"}, {"rule_code": "R4"}, {"rule_code": "R9"}],
+        )
+
+        self.assertIn("R3", {item["rule_code"] for item in findings})
+        self.assertIn("R9", {item["rule_code"] for item in findings})
+        self.assertTrue(any("低价优先原则" in str(item["risk_title"]) for item in findings))
+
     def test_review_executor_persists_heuristic_findings_without_llm_hits(self):
         class SilentClient:
             max_clauses = 20
@@ -2057,6 +2117,322 @@ class ParseWorkerTestCase(unittest.TestCase):
             self.assertIn("rule_v1_r4", {risk.rule_id for risk in risks})
             self.assertIn("rule_v1_r9", {risk.rule_id for risk in risks})
             self.assertTrue(any("低价优先原则" in risk.risk_title for risk in risks))
+
+    def test_is_r5_noise_clause_filters_quote_and_ip_context(self):
+        quote_clause = build_clause_record(
+            clause_id="quote_clause",
+            document_id="d1",
+            chapter_id="c1",
+            chapter_title="四、项目详细报价",
+            clause_order=1,
+            clause_text="如所投货物属于定制类的非量产货物或无具体型号的货物，可以在规格/型号栏目仅填写规格信息而不填型号信息。",
+            location_label="四、项目详细报价 / 规格/型号说明",
+            module_type="其他",
+            unit_type="条款",
+            unit_label="普通条款",
+            unit_name="规格/型号说明",
+            clause_type="条款片段",
+        )
+        ip_clause = build_clause_record(
+            clause_id="ip_clause",
+            document_id="d1",
+            chapter_id="c2",
+            chapter_title="二、政府采购投标及履约承诺函",
+            clause_order=2,
+            clause_text="采购人在中华人民共和国使用该货物时，不会产生因第三方提出的专利权、商标权等知识产权纠纷。",
+            location_label="二、政府采购投标及履约承诺函 / 知识产权承诺",
+            module_type="其他",
+            unit_type="条款",
+            unit_label="普通条款",
+            unit_name="知识产权承诺",
+            clause_type="条款片段",
+        )
+        real_r5_clause = build_clause_record(
+            clause_id="real_r5_clause",
+            document_id="d1",
+            chapter_id="c3",
+            chapter_title="四、技术要求",
+            clause_order=3,
+            clause_text="提供与影像处理平台同品牌内窥镜主机。",
+            location_label="四、技术要求 / 1.5.2 内窥镜控制单元",
+            module_type="采购需求",
+            unit_type="参数项",
+            unit_label="单条技术参数",
+            unit_name="内窥镜控制单元",
+            clause_type="条款片段",
+        )
+
+        self.assertTrue(_is_r5_noise_clause(quote_clause))
+        self.assertTrue(_is_r5_noise_clause(ip_clause))
+        self.assertFalse(_is_r5_noise_clause(real_r5_clause))
+
+    def test_is_r4_noise_clause_filters_credit_and_warning_context(self):
+        credit_clause = build_clause_record(
+            clause_id="credit_clause",
+            document_id="d1",
+            chapter_id="c1",
+            chapter_title="二、政府采购投标及履约承诺函",
+            clause_order=1,
+            clause_text="我单位已知悉并接受信用信息管理办法相关要求，如存在违法失信记录将依法承担责任。",
+            location_label="二、政府采购投标及履约承诺函 / 信用信息管理办法",
+            module_type="程序条款",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="信用信息管理办法",
+            clause_type="条款片段",
+        )
+        warning_clause = build_clause_record(
+            clause_id="warning_clause",
+            document_id="d1",
+            chapter_id="c2",
+            chapter_title="四、我单位已充分知悉",
+            clause_order=2,
+            clause_text="我单位已充分知悉特别警示条款，并承诺配合后续采购程序安排。",
+            location_label="四、我单位已充分知悉 / 特别警示条款",
+            module_type="程序条款",
+            unit_type="条款",
+            unit_label="不确定审查对象",
+            unit_name="特别警示条款",
+            clause_type="条款片段",
+        )
+        real_r4_clause = build_clause_record(
+            clause_id="real_r4_clause",
+            document_id="d1",
+            chapter_id="c3",
+            chapter_title="一、投标人资格要求",
+            clause_order=3,
+            clause_text="投标人须具有深圳市医疗器械行业同类项目业绩不少于2个。",
+            location_label="一、投标人资格要求 / 同类项目业绩",
+            module_type="资格条件",
+            unit_type="条款",
+            unit_label="单条业绩要求",
+            unit_name="同类项目业绩要求",
+            clause_type="条款片段",
+        )
+
+        self.assertTrue(_is_r4_noise_clause(credit_clause))
+        self.assertTrue(_is_r4_noise_clause(warning_clause))
+        self.assertFalse(_is_r4_noise_clause(real_r4_clause))
+
+    def test_repository_get_result_by_task_returns_latest_result(self):
+        with tempfile.TemporaryDirectory() as runtime_dir:
+            repository = JsonRepository(Path(runtime_dir))
+            first = build_review_result_record(
+                result_id="result_old",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                summary_title="审查已完成",
+                overall_conclusion="旧结果",
+                report_markdown="# 旧报告",
+                conclusion_markdown="# 旧结论",
+                risk_count_high=10,
+                risk_count_medium=0,
+                risk_count_low=0,
+                report_file_path="/tmp/old-report.md",
+                conclusion_file_path="/tmp/old-conclusion.md",
+            )
+            second = build_review_result_record(
+                result_id="result_new",
+                task_id="task_001",
+                project_id="project_001",
+                document_id="document_001",
+                summary_title="审查已完成",
+                overall_conclusion="新结果",
+                report_markdown="# 新报告",
+                conclusion_markdown="# 新结论",
+                risk_count_high=3,
+                risk_count_medium=1,
+                risk_count_low=0,
+                report_file_path="/tmp/new-report.md",
+                conclusion_file_path="/tmp/new-conclusion.md",
+            )
+
+            repository.save_result(first)
+            repository.save_result(second)
+
+            result = repository.get_result_by_task("task_001")
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result.result_id, "result_new")
+            self.assertEqual(result.overall_conclusion, "新结果")
+
+    def test_select_rule_candidate_clause_map_prefers_explicit_scoring_signal_over_boilerplate(self):
+        rules = [
+            {
+                "rule_code": "R9",
+                "rule_name": "评分项未量化检查",
+                "rule_domain": "评审可解释性规则",
+                "hit_definition": "评分因素或评分方法存在违法情形时命中。",
+                "focus_terms": ["综合评分法", "评标基准价"],
+                "positive_examples": ["评标基准价按算术平均价确定。"],
+            }
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="boilerplate",
+                document_id="d1",
+                chapter_id="c1",
+                chapter_title="十一、合同生效及其他",
+                clause_order=1,
+                clause_text="综合评分法，是指在满足招标文件全部实质性要求的前提下，按照招标文件中规定的各项因素进行综合评审。",
+                location_label="十一、合同生效及其他 / 37.1.2 综合评分法",
+                module_type="评分办法",
+                unit_type="评分项",
+                unit_label="单个评分项",
+                unit_name="综合评分法",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="explicit_price_rule",
+                document_id="d1",
+                chapter_id="c2",
+                chapter_title="五、风险知悉确认书",
+                clause_order=2,
+                clause_text="投标报价得分=(评标基准价／投标报价)×100，评标基准价按所有有效投标报价的算术平均价确定。",
+                location_label="五、风险知悉确认书 / 价格分公式",
+                module_type="程序条款",
+                unit_type="条款",
+                unit_label="不确定审查对象",
+                unit_name="价格分公式",
+                clause_type="条款片段",
+            ),
+        ]
+
+        mapping = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in mapping["R9"][:2]], ["explicit_price_rule", "boilerplate"])
+
+    def test_select_rule_candidate_clause_map_skips_r4_noise_context(self):
+        rules = [
+            {
+                "rule_code": "R4",
+                "rule_name": "业绩要求定向检查",
+                "rule_domain": "公平竞争规则",
+                "hit_definition": "资格业绩要求存在区域或数量定向风险时命中。",
+                "focus_terms": ["同类项目业绩不少于", "深圳市"],
+                "positive_examples": ["投标人须具有深圳市同类项目业绩不少于2个。"],
+            }
+        ]
+        clauses = [
+            build_clause_record(
+                clause_id="r4_noise",
+                document_id="d1",
+                chapter_id="c1",
+                chapter_title="二、政府采购投标及履约承诺函",
+                clause_order=1,
+                clause_text="我单位已知悉并接受信用信息管理办法相关要求。",
+                location_label="二、政府采购投标及履约承诺函 / 信用信息管理办法",
+                module_type="程序条款",
+                unit_type="条款",
+                unit_label="不确定审查对象",
+                unit_name="信用信息管理办法",
+                clause_type="条款片段",
+            ),
+            build_clause_record(
+                clause_id="r4_real",
+                document_id="d1",
+                chapter_id="c2",
+                chapter_title="一、投标人资格要求",
+                clause_order=2,
+                clause_text="投标人须具有深圳市医疗器械行业同类项目业绩不少于2个。",
+                location_label="一、投标人资格要求 / 同类项目业绩",
+                module_type="资格条件",
+                unit_type="条款",
+                unit_label="单条业绩要求",
+                unit_name="同类项目业绩要求",
+                clause_type="条款片段",
+            ),
+        ]
+
+        mapping = _select_rule_candidate_clause_map(
+            rules=rules,
+            clauses=clauses,
+            max_clauses_per_rule=2,
+        )
+
+        self.assertEqual([clause.clause_id for clause in mapping["R4"]], ["r4_real"])
+
+    def test_review_executor_filters_r5_noise_findings_before_persist(self):
+        class NoiseClient:
+            max_clauses = 20
+            max_clauses_per_rule = 24
+            batch_size = 4
+            clause_max_chars = 800
+            batch_char_budget = 1000
+            rule_limit = 6
+
+            def review_batch(self, *, prompt_text: str, payload: dict[str, object]) -> list[dict[str, object]]:
+                findings: list[dict[str, object]] = []
+                for clause in payload["clauses"]:
+                    assert isinstance(clause, dict)
+                    text = str(clause["clause_text"])
+                    if "规格/型号" in text or "知识产权" in text:
+                        findings.append(
+                            {
+                                "clause_id": clause["clause_id"],
+                                "rule_code": "R5",
+                                "risk_title": "品牌/型号指向检查",
+                                "risk_level": "高",
+                                "risk_category": "公平竞争",
+                                "evidence_text": text,
+                                "review_reasoning": "模型误把规格/型号说明或知识产权承诺识别成品牌型号风险。",
+                                "need_human_confirm": True,
+                            }
+                        )
+                    if "同品牌" in text:
+                        findings.append(
+                            {
+                                "clause_id": clause["clause_id"],
+                                "rule_code": "R5",
+                                "risk_title": "品牌/型号指向检查",
+                                "risk_level": "高",
+                                "risk_category": "公平竞争",
+                                "evidence_text": text,
+                                "review_reasoning": "模型识别到真实同品牌约束。",
+                                "need_human_confirm": True,
+                            }
+                        )
+                return findings
+
+        root_dir = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as runtime_dir, fake_llm_environment():
+            repository = JsonRepository(Path(runtime_dir))
+            upload_service = UploadService(repository)
+            upload_response = upload_service.create_review_task(
+                UploadFile(
+                    filename="r5-noise.docx",
+                    content=build_minimal_docx(
+                        [
+                            "第一章 说明",
+                            "1.1 项目详细报价",
+                            "如所投货物属于定制类的非量产货物或无具体型号的货物，可以在规格/型号栏目仅填写规格信息而不填型号信息。",
+                            "1.2 承诺函",
+                            "采购人在中华人民共和国使用该货物时，不会产生因第三方提出的专利权、商标权等知识产权纠纷。",
+                            "第二章 技术要求",
+                            "2.1 技术参数",
+                            "提供与影像处理平台同品牌内窥镜主机。",
+                        ]
+                    ),
+                )
+            )
+            ParseWorker(repository).run_pending_jobs()
+
+            executor = ReviewExecutor(repository, root_dir)
+            executor.client = NoiseClient()
+
+            processed_count = executor.run_pending_jobs()
+
+            self.assertEqual(processed_count, 1)
+            risks = repository.list_risks_by_task(upload_response["task_id"])
+            self.assertEqual(len(risks), 1)
+            self.assertEqual(risks[0].rule_id, "rule_v1_r5")
+            self.assertIn("同品牌", risks[0].risk_description)
 
     def test_review_executor_splits_failed_batch_and_keeps_task_running(self):
         class FlakyClient:

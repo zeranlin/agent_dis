@@ -128,14 +128,29 @@ class JsonRepository:
         return sorted(evidence_records, key=lambda item: item.evidence_id)
 
     def save_result(self, result: ReviewResultRecord) -> None:
-        self._update_json_mapping(self.results_path, result.result_id, result.to_dict())
+        lock = self._lock_for(self.results_path)
+        with lock:
+            with self._process_lock(self.results_path):
+                current_payload = self._read_json(self.results_path)
+                filtered_payload = {
+                    key: value
+                    for key, value in current_payload.items()
+                    if value.get("task_id") != result.task_id
+                }
+                filtered_payload[result.result_id] = result.to_dict()
+                self._write_json(self.results_path, filtered_payload)
 
     def get_result_by_task(self, task_id: str) -> ReviewResultRecord | None:
         results = self._read_json(self.results_path)
-        for payload in results.values():
-            if payload["task_id"] == task_id:
-                return ReviewResultRecord(**payload)
-        return None
+        matched_results = [
+            ReviewResultRecord(**payload)
+            for payload in results.values()
+            if payload["task_id"] == task_id
+        ]
+        if not matched_results:
+            return None
+        matched_results.sort(key=lambda item: item.generated_at, reverse=True)
+        return matched_results[0]
 
     def read_report_markdown(self, task_id: str) -> str | None:
         target_path = self.report_dir / f"{task_id}-审查报告.md"
