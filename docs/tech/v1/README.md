@@ -54,6 +54,10 @@
 - `implementation-prep-round-27.md`：第二十七轮实现准备，聚焦联调清单、验收入口与交付交接说明
 - `implementation-prep-round-28.md`：第二十八轮实现准备，聚焦真实样例联调结果与验收放行判断
 
+## 交付准备模板
+
+- `docs/templates/integration-validation-template.md`：联调与验收记录模板
+
 ## 当前规则
 
 - 所有文档默认使用中文
