@@ -20,6 +20,14 @@ def extract_clause_type(review_reasoning: str, *, default: str = "") -> str:
     return default
 
 
+def extract_unit_label(review_reasoning: str, *, default: str = "") -> str:
+    marker = "业务单元："
+    if marker not in review_reasoning:
+        return default
+    unit_part = review_reasoning.split(marker, 1)[1]
+    return unit_part.split("，", 1)[0].strip() or default
+
+
 def sort_risks_for_display(risks: list[object]) -> list[object]:
     return sorted(
         risks,
@@ -113,6 +121,7 @@ def group_risks(
                 "location_label": representative.location_label,
                 "chapter_title": extract_chapter_title(representative.location_label),
                 "clause_type": extract_clause_type(representative.review_reasoning),
+                "unit_label": extract_unit_label(representative.review_reasoning),
                 "risk_description": merge_texts(
                     [str(item.risk_description) for item in merged_risks],
                     fallback=str(representative.risk_description),
@@ -161,6 +170,7 @@ def build_top_risk_payload(risk_group: dict[str, object]) -> dict[str, object]:
         "location_label": risk_group["location_label"],
         "chapter_title": risk_group["chapter_title"],
         "clause_type": risk_group["clause_type"],
+        "unit_label": risk_group["unit_label"],
         "risk_description": risk_group["risk_description"],
         "review_reasoning": risk_group["review_reasoning"],
         "merged_hit_count": risk_group["merged_hit_count"],

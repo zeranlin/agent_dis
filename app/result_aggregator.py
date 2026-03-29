@@ -163,6 +163,7 @@ def build_report_markdown(
                 f"- 风险级别：{risk_group['risk_level']}",
                 f"- 规则域：{risk_group['rule_domain']}",
                 f"- 章节上下文：{risk_group['chapter_title'] or '无'}",
+                f"- 业务单元：{risk_group['unit_label'] or '未标注'}",
                 f"- 片段类型：{risk_group['clause_type'] or '未标注'}",
                 f"- 命中位置：{risk_group['location_label']}",
                 f"- 归并命中数：{risk_group['merged_hit_count']}",

@@ -70,6 +70,7 @@ ul { line-height: 1.8; }
             f"<strong>{escape(str(item['risk_title']))}</strong> | {escape(str(item['risk_level']))}<br>"
             f"<span class=\"tiny\">归并命中数：{escape(str(item.get('merged_hit_count') or 1))}</span><br>"
             f"<span class=\"tiny\">章节上下文：{escape(str(item.get('chapter_title') or '未标注'))}</span><br>"
+            f"<span class=\"tiny\">业务单元：{escape(str(item.get('unit_label') or '未标注'))}</span><br>"
             f"<span class=\"tiny\">片段类型：{escape(str(item.get('clause_type') or '未标注'))}</span><br>"
             f"<span class=\"tiny\">命中位置：{escape(str(item['location_label']))}</span><br>"
             f"{escape(str(item['risk_description']))}<br>"

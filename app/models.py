@@ -117,8 +117,11 @@ class ClauseRecord:
     document_id: str
     chapter_id: str
     chapter_title: str
+    review_unit_id: str
     module_type: str
     unit_type: str
+    unit_label: str
+    unit_name: str
     clause_type: str
     clause_order: int
     clause_text: str
@@ -330,8 +333,11 @@ def build_clause_record(
     clause_order: int,
     clause_text: str,
     location_label: str,
+    review_unit_id: str = "",
     module_type: str = "其他",
     unit_type: str = "条款",
+    unit_label: str = "普通条款",
+    unit_name: str = "",
     parent_unit_id: str | None = None,
     clause_type: str = "未分类条款",
 ) -> ClauseRecord:
@@ -340,8 +346,11 @@ def build_clause_record(
         document_id=document_id,
         chapter_id=chapter_id,
         chapter_title=chapter_title,
+        review_unit_id=review_unit_id or clause_id,
         module_type=module_type,
         unit_type=unit_type,
+        unit_label=unit_label,
+        unit_name=unit_name,
         clause_type=clause_type,
         clause_order=clause_order,
         clause_text=clause_text,

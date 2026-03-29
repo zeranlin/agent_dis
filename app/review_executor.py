@@ -309,8 +309,11 @@ def _build_batch_payload(
         "clauses": [
             {
                 "clause_id": clause.clause_id,
+                "review_unit_id": clause.review_unit_id,
                 "module_type": clause.module_type,
                 "unit_type": clause.unit_type,
+                "unit_label": clause.unit_label,
+                "unit_name": clause.unit_name,
                 "chapter_title": clause.chapter_title,
                 "clause_type": clause.clause_type,
                 "clause_text": clause.clause_text[:clause_max_chars],
@@ -658,7 +661,7 @@ def _build_risk_description(*, rule: dict[str, object], clause: object, finding:
     risk_title = _normalize_text(finding.get("risk_title"), fallback=str(rule["rule_name"]))
     reasoning = _normalize_text(finding.get("review_reasoning"), fallback="模型未返回额外说明。")
     return (
-        f"{clause.chapter_title}的{clause.clause_type}疑似命中规则 {rule['rule_code']}（{risk_title}），"
+        f"{clause.chapter_title}的{clause.unit_label}疑似命中规则 {rule['rule_code']}（{risk_title}），"
         f"风险分类：{risk_category}。模型判断：{reasoning}"
     )
 
@@ -670,6 +673,8 @@ def _build_review_reasoning(*, rule: dict[str, object], clause: object, finding:
     return (
         f"LLM 审查在“{clause.location_label}”识别到疑似风险，"
         f"当前内容属于{clause.chapter_title}的{clause.clause_type}，"
+        f"业务单元：{clause.unit_label}"
+        f"{f'（{clause.unit_name}）' if str(clause.unit_name).strip() else ''}，"
         f"对应规则 {rule['rule_code']}（{rule['rule_name']}），"
         f"风险分类：{risk_category}，建议人工确认：{need_human_confirm}。"
         f"模型理由：{reasoning}"
@@ -680,6 +685,7 @@ def _build_evidence_note(*, clause: object, finding: dict[str, object]) -> str:
     risk_category = _normalize_text(finding.get("risk_category"), fallback="未分类")
     need_human_confirm = "是" if _normalize_bool(finding.get("need_human_confirm")) else "否"
     return (
-        f"{clause.chapter_title}的{clause.clause_type}原文证据。"
+        f"{clause.chapter_title}的{clause.unit_label}原文证据，"
+        f"片段类型：{clause.clause_type}。"
         f"风险分类：{risk_category}，建议人工确认：{need_human_confirm}。"
     )

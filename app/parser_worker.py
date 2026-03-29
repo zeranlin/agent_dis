@@ -95,17 +95,20 @@ class ParseWorker:
                     text=str(block.text),
                 )
                 clause_slices = _build_reviewable_clause_slices(block=block)
-                parent_unit_id = f"unit_{block.block_id}" if len(clause_slices) > 1 else None
+                review_unit_id = f"unit_{block.block_id}"
+                parent_unit_id = review_unit_id if len(clause_slices) > 1 else None
                 for slice_index, clause_slice in enumerate(clause_slices, start=1):
                     normalized_text = _normalize_clause_text(clause_slice["text"])
                     if not normalized_text or normalized_text in seen_clause_texts:
                         continue
                     seen_clause_texts.add(normalized_text)
                     clause_count += 1
-                    unit_type = _classify_review_unit_type(
+                    unit_type, unit_label, unit_name = _classify_review_unit(
                         module_type=module_type,
                         clause_type=clause_type,
                         chapter_title=chapter_title,
+                        block_title=str(block.title),
+                        source_anchor=str(clause_slice["anchor"]),
                         text=clause_slice["text"],
                     )
                     self.repository.save_clause(
@@ -114,8 +117,11 @@ class ParseWorker:
                             document_id=document.document_id,
                             chapter_id=parent_chapter_id,
                             chapter_title=chapter_title,
+                            review_unit_id=review_unit_id,
                             module_type=module_type,
                             unit_type=unit_type,
+                            unit_label=unit_label,
+                            unit_name=unit_name,
                             clause_order=(block.order_index * 100) + slice_index,
                             clause_text=clause_slice["text"],
                             location_label=f"{chapter_title} / {clause_slice['anchor']}",
@@ -182,6 +188,32 @@ BUSINESS_MODULE_KEYWORDS = {
 }
 TABLE_ROW_HINTS = ("|", "｜")
 DEVIATION_KEYWORDS = ("偏离", "偏差", "响应情况", "响应偏离")
+QUALIFICATION_PERFORMANCE_KEYWORDS = ("业绩", "案例", "经验")
+QUALIFICATION_CERT_KEYWORDS = ("资质", "证书", "认证", "许可", "执业", "资格证")
+QUALIFICATION_CREDIT_KEYWORDS = ("信用", "失信", "信誉")
+PROCUREMENT_DELIVERY_KEYWORDS = ("交付", "供货期", "工期", "到货", "实施周期")
+PROCUREMENT_SERVICE_KEYWORDS = ("服务", "驻场", "培训", "维护", "售后")
+PROCUREMENT_FUNCTION_KEYWORDS = ("功能", "配置", "接口", "模块")
+SCORE_PRICE_KEYWORDS = ("价格分", "报价分", "价格评审")
+SCORE_BUSINESS_KEYWORDS = ("商务分", "商务评审", "企业实力", "业绩分")
+SCORE_TECH_KEYWORDS = ("技术分", "技术评审", "技术响应")
+CONTRACT_PAYMENT_KEYWORDS = ("付款", "支付", "结算")
+CONTRACT_ACCEPTANCE_KEYWORDS = ("验收", "初验", "终验")
+CONTRACT_BREACH_KEYWORDS = ("违约", "罚则", "赔偿", "追偿")
+CONTRACT_WARRANTY_KEYWORDS = ("质保", "保修", "售后")
+CONTRACT_EXPENSE_KEYWORDS = ("费用", "承担", "风险", "保险")
+GENERIC_TABLE_HEADER_KEYWORDS = (
+    "序号",
+    "条款号",
+    "评分项",
+    "分值",
+    "内容",
+    "要求",
+    "指标",
+    "响应情况",
+    "参数名称",
+    "指标要求",
+)
 
 
 def _normalize_clause_text(text: str) -> str:
@@ -305,23 +337,102 @@ def _classify_business_module(*, chapter_title: str, block_title: str, text: str
     return best_module_type
 
 
-def _classify_review_unit_type(*, module_type: str, clause_type: str, chapter_title: str, text: str) -> str:
+def _classify_review_unit(
+    *,
+    module_type: str,
+    clause_type: str,
+    chapter_title: str,
+    block_title: str,
+    source_anchor: str,
+    text: str,
+) -> tuple[str, str, str]:
     normalized_text = str(text)
-    combined_text = f"{chapter_title}\n{normalized_text}"
+    combined_text = f"{chapter_title}\n{block_title}\n{normalized_text}"
+    is_table_row = any(marker in normalized_text for marker in TABLE_ROW_HINTS)
+    unit_name = _extract_unit_name(
+        clause_type=clause_type,
+        block_title=block_title,
+        source_anchor=source_anchor,
+        text=normalized_text,
+    )
+
     if any(keyword in combined_text for keyword in DEVIATION_KEYWORDS):
-        return "偏离项"
-    if any(marker in normalized_text for marker in TABLE_ROW_HINTS):
-        if module_type == "评分办法":
-            return "评分项"
-        if module_type == "采购需求":
-            return "参数项"
-        return "表格行"
-    if module_type == "合同条款":
-        return "合同项"
+        return "偏离项", "单个偏离项", unit_name
+
+    if module_type == "资格条件":
+        if any(keyword in combined_text for keyword in QUALIFICATION_PERFORMANCE_KEYWORDS):
+            return "条款", "单条业绩要求", unit_name
+        if any(keyword in combined_text for keyword in QUALIFICATION_CERT_KEYWORDS):
+            return "条款", "单条资质要求", unit_name
+        if any(keyword in combined_text for keyword in QUALIFICATION_CREDIT_KEYWORDS):
+            return "条款", "单条信用要求", unit_name
+        return "条款", "单条资格要求", unit_name
+
     if module_type == "采购需求":
-        return "参数项"
+        if any(keyword in combined_text for keyword in PROCUREMENT_DELIVERY_KEYWORDS):
+            return "参数项", "单条交付要求", unit_name
+        if any(keyword in combined_text for keyword in PROCUREMENT_SERVICE_KEYWORDS):
+            return "参数项", "单条服务要求", unit_name
+        if any(keyword in combined_text for keyword in PROCUREMENT_FUNCTION_KEYWORDS):
+            return "参数项", "单条功能要求", unit_name
+        if is_table_row:
+            return "参数项", "单个参数项", unit_name
+        return "参数项", "单条技术参数", unit_name
+
     if module_type == "评分办法":
-        return "评分项"
-    if module_type in {"资格条件", "程序条款", "政策条款"}:
-        return "条款"
-    return "条款"
+        if any(keyword in combined_text for keyword in SCORE_PRICE_KEYWORDS):
+            return "评分项", "价格分规则", unit_name
+        if any(keyword in combined_text for keyword in SCORE_BUSINESS_KEYWORDS):
+            return "评分项", "商务分规则", unit_name
+        if any(keyword in combined_text for keyword in SCORE_TECH_KEYWORDS):
+            return "评分项", "技术分规则", unit_name
+        return "评分项", "单个评分项", unit_name
+
+    if module_type == "合同条款":
+        if any(keyword in combined_text for keyword in CONTRACT_PAYMENT_KEYWORDS):
+            return "合同项", "付款条款", unit_name
+        if any(keyword in combined_text for keyword in CONTRACT_ACCEPTANCE_KEYWORDS):
+            return "合同项", "验收条款", unit_name
+        if any(keyword in combined_text for keyword in CONTRACT_BREACH_KEYWORDS):
+            return "合同项", "违约责任条款", unit_name
+        if any(keyword in combined_text for keyword in CONTRACT_WARRANTY_KEYWORDS):
+            return "合同项", "质保条款", unit_name
+        if any(keyword in combined_text for keyword in CONTRACT_EXPENSE_KEYWORDS):
+            return "合同项", "费用承担条款", unit_name
+        return "合同项", "单条合同条款", unit_name
+
+    if is_table_row:
+        return "表格行", "普通表格行", unit_name
+    return "条款", "普通条款", unit_name
+
+
+def _extract_unit_name(*, clause_type: str, block_title: str, source_anchor: str, text: str) -> str:
+    if "表格" in clause_type or any(marker in text for marker in TABLE_ROW_HINTS):
+        for line in [item.strip() for item in str(text).splitlines() if item.strip()]:
+            if not any(marker in line for marker in TABLE_ROW_HINTS):
+                continue
+            cells = [part.strip() for part in PIPE_SPLIT_PATTERN.split(line) if part.strip()]
+            meaningful_cells = [
+                cell
+                for cell in cells[:3]
+                if not cell.isdigit() and cell not in GENERIC_TABLE_HEADER_KEYWORDS
+            ]
+            if meaningful_cells:
+                return _truncate_unit_name(meaningful_cells[0])
+            if cells and not all(cell in GENERIC_TABLE_HEADER_KEYWORDS for cell in cells):
+                return _truncate_unit_name(cells[0])
+
+    for candidate in (block_title, source_anchor):
+        cleaned = str(candidate).strip()
+        if cleaned:
+            return _truncate_unit_name(cleaned)
+
+    first_line = str(text).splitlines()[0].strip() if str(text).splitlines() else ""
+    return _truncate_unit_name(first_line or "未命名单元")
+
+
+def _truncate_unit_name(value: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value)).strip()
+    if len(cleaned) <= 36:
+        return cleaned
+    return f"{cleaned[:36].rstrip()}..."
