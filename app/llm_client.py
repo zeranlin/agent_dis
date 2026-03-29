@@ -29,6 +29,7 @@ class LlmClientConfig:
     clause_max_chars: int
     max_completion_tokens: int
     reasoning_effort: str
+    disable_thinking: bool
 
 
 def load_llm_config_from_env() -> LlmClientConfig:
@@ -52,6 +53,13 @@ def load_llm_config_from_env() -> LlmClientConfig:
     clause_max_chars = max(200, int(os.environ.get("OPENAI_REVIEW_CLAUSE_MAX_CHARS", "1200")))
     max_completion_tokens = max(128, int(os.environ.get("OPENAI_MAX_COMPLETION_TOKENS", "800")))
     reasoning_effort = (os.environ.get("OPENAI_REASONING_EFFORT") or "low").strip() or "low"
+    disable_thinking = (os.environ.get("OPENAI_DISABLE_THINKING") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
     return LlmClientConfig(
         base_url=base_url.rstrip("/"),
         api_key=api_key,
@@ -61,6 +69,7 @@ def load_llm_config_from_env() -> LlmClientConfig:
         clause_max_chars=clause_max_chars,
         max_completion_tokens=max_completion_tokens,
         reasoning_effort=reasoning_effort,
+        disable_thinking=disable_thinking,
     )
 
 
@@ -101,6 +110,9 @@ class OpenAiCompatibleLlmClient:
                 },
             ],
         }
+        if self.config.disable_thinking:
+            body["max_tokens"] = self.config.max_completion_tokens
+            body["chat_template_kwargs"] = {"enable_thinking": False}
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         http_request = request.Request(
             endpoint,
@@ -141,18 +153,33 @@ def _extract_message_content(response_payload: dict[str, Any]) -> str:
     message = choices[0].get("message")
     if not isinstance(message, dict):
         raise LlmResponseFormatError("LLM 响应缺少 message。")
-    content = message.get("content")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
+    candidates = [
+        _extract_text_from_value(message.get("content")),
+        _extract_text_from_value(message.get("reasoning")),
+    ]
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    raise LlmResponseFormatError("LLM 响应缺少可解析文本内容。")
+
+
+def _extract_text_from_value(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
         text_parts = [
             str(item.get("text"))
-            for item in content
+            for item in value
             if isinstance(item, dict) and item.get("type") == "text" and item.get("text")
         ]
         if text_parts:
             return "\n".join(text_parts)
-    raise LlmResponseFormatError("LLM 响应缺少可解析文本内容。")
+    if isinstance(value, dict):
+        for key in ("text", "content", "reasoning"):
+            nested = value.get(key)
+            if isinstance(nested, str) and nested:
+                return nested
+    return ""
 
 
 def _parse_json_content(content: str) -> dict[str, Any]:
@@ -162,11 +189,7 @@ def _parse_json_content(content: str) -> dict[str, Any]:
     try:
         parsed = json.loads(candidate)
     except json.JSONDecodeError:
-        start = candidate.find("{")
-        end = candidate.rfind("}")
-        if start == -1 or end == -1 or start >= end:
-            raise LlmResponseFormatError("LLM 输出不是有效 JSON。") from None
-        parsed = json.loads(candidate[start : end + 1])
+        parsed = _parse_embedded_json_object(candidate)
     if not isinstance(parsed, dict):
         raise LlmResponseFormatError("LLM 输出根对象必须是 JSON 对象。")
     return parsed
@@ -177,3 +200,27 @@ def _strip_code_fence(content: str) -> str:
     if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].startswith("```"):
         return "\n".join(lines[1:-1]).strip()
     return content
+
+
+def _parse_embedded_json_object(candidate: str) -> dict[str, Any]:
+    brace_positions = [index for index, char in enumerate(candidate) if char == "{"]
+    best_match: dict[str, Any] | None = None
+    best_span = -1
+    for start in brace_positions:
+        end = candidate.rfind("}")
+        while end != -1:
+            snippet = candidate[start : end + 1]
+            try:
+                parsed = json.loads(snippet)
+            except json.JSONDecodeError:
+                end = candidate.rfind("}", start, end)
+                continue
+            if isinstance(parsed, dict):
+                span = end - start
+                if span > best_span:
+                    best_match = parsed
+                    best_span = span
+            end = candidate.rfind("}", start, end)
+    if best_match is not None:
+        return best_match
+    raise LlmResponseFormatError("LLM 输出不是有效 JSON。")

@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 from app.asset_loader import ReviewAssetLoader
+from app.llm_client import _extract_message_content, _parse_json_content
 from app.models import build_clause_record, build_risk_item_record
 from app.parser_worker import ParseWorker
 from app.result_aggregator import build_report_markdown
@@ -88,6 +89,36 @@ def save_clause_batch(runtime_dir: str, prefix: str, total: int) -> None:
 
 
 class ParseWorkerTestCase(unittest.TestCase):
+    def test_llm_client_extracts_reasoning_when_content_is_null(self):
+        payload = {
+            "choices": [
+                {
+                    "message": {
+                        "content": None,
+                        "reasoning": "Thinking Process:\\n\\n最终输出：\\n{\"findings\":[]}",
+                    }
+                }
+            ]
+        }
+
+        content = _extract_message_content(payload)
+
+        self.assertIn("{\"findings\":[]}", content)
+
+    def test_llm_client_parses_embedded_json_from_reasoning_text(self):
+        content = (
+            "Thinking Process:\\n"
+            "1. 分析输入。\\n"
+            "2. 形成输出。\\n"
+            "最终输出：\\n"
+            "{\"findings\":[{\"rule_code\":\"R1\",\"clause_id\":\"c1\"}]}"
+        )
+
+        parsed = _parse_json_content(content)
+
+        self.assertIn("findings", parsed)
+        self.assertEqual(parsed["findings"][0]["rule_code"], "R1")
+
     def test_repository_keeps_json_valid_under_multi_process_clause_writes(self):
         with tempfile.TemporaryDirectory() as runtime_dir:
             process_context = multiprocessing.get_context("fork")
