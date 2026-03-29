@@ -86,6 +86,7 @@
 当前这一层已经开始承载 V1 最小实现骨架，包括：
 
 - `app/`：V1 服务骨架，当前负责上传接口、任务状态模型和本地持久化最小实现
+- `project/`：面向政府采购招标审查正式重构方向的新实现目录，后续优先承接业务化解析、收缩式 `LLM` 执行与结果汇总新链路
 - `assets/`：V1 审查资产，当前负责默认规则包和固定审查任务指令
 - `tests/`：最小自动化验证，当前负责上传接口与任务状态查询验证
 
@@ -122,6 +123,31 @@
 - 长期决策沉淀到 `docs/logs/decisions.md`
 - 当前推进状态沉淀到 `docs/tasks/current.md`
 - 详细推进历史沉淀到 `docs/tasks/archive/`
+
+### 重构实现子系统
+
+负责：
+
+- 承接后续面向政府采购招标审查正式重构的新代码
+- 优先承接业务化解析层
+- 优先承接收缩式 `LLM` 审查执行层
+- 优先承接风险归并与正式结果输出链路
+
+依赖：
+
+- `assets/` 下的规则包与任务指令资产
+- `docs/business/` 与 `docs/tech/v1/` 中已经确认的业务与技术约束
+
+验证方式：
+
+- `make check`
+- 后续迁移到该目录的单元测试与集成测试
+
+沉淀位置：
+
+- 总体约束沉淀到 `docs/tech/v1/business-driven-technical-constraints.md`
+- 业务化解析约束沉淀到 `docs/business/v1/government-procurement-business-oriented-parsing-plan.md`
+- `LLM` 收缩约束沉淀到 `docs/tech/v1/llm-v1-reduction-plan.md`
 
 ## 计划中的扩展顺序
 

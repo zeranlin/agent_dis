@@ -29,6 +29,7 @@ make check
 - `docs/tech/v1/`：V1 技术方案、进度与规则包治理说明
 - `.github/`：Pull Request 模板
 - `app/`：V1 最小服务骨架
+- `project/`：面向政府采购招标审查正式重构方向的新实现目录
 - `assets/`：V1 审查规则包与任务指令资产
 - `tests/`：最小自动化验证
 
