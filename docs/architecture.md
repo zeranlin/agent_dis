@@ -102,6 +102,7 @@
 - 持久化 `review_task` 和基础文件元数据
 - 为后续解析链路预留异步任务入口
 - 提供最小解析 worker 和规则资产加载能力
+- 承载默认规则包与固定审查任务指令的装配执行
 
 依赖：
 
@@ -117,6 +118,7 @@
 沉淀位置：
 
 - 架构和边界沉淀到 `docs/tech/v1/`
+- 规则包在总流程中的位置、维护机制和版本策略沉淀到 `docs/tech/v1/rule-pack-governance.md`
 - 长期决策沉淀到 `docs/logs/decisions.md`
 - 当前推进状态沉淀到 `docs/tasks/current.md`
 - 详细推进历史沉淀到 `docs/tasks/archive/`

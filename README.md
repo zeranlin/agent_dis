@@ -26,6 +26,7 @@ make check
 - `docs/logs/`：实验与决策记录
 - `docs/standards/`：编码与仓库约束
 - `docs/runbooks/`：可复用的工作流与变更清单
+- `docs/tech/v1/`：V1 技术方案、进度与规则包治理说明
 - `.github/`：Pull Request 模板
 - `app/`：V1 最小服务骨架
 - `assets/`：V1 审查规则包与任务指令资产
